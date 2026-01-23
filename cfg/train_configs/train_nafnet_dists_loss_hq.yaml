@@ -1,0 +1,43 @@
+# logging: use high quality data for training
+output_dir: /public_bme2/bme-dgshen/ZhongjianJiang/projects/shanghaitech-uii-mr/runs # ./runs #
+project_name: train_nafnet
+exp_name: dists_loss_5e-2_hq_lr_1e-4
+logging_dir: logs
+report_to: wandb
+sample_every: 1000 # 1000 # sample every this many steps
+resume_from_checkpoint: latest
+# model
+pretrained: /public_bme2/bme-dgshen/ZhongjianJiang/projects/shanghaitech-uii-mr/runs/train_nafnet/dists_loss_1e-4_hq_lr_1e-4/checkpoints/model_ema.pt # ./runs/<project_name>/<exp_name>/checkpoints/step_xxx.ckpt  ./runs/train_nafnet/dists_loss_1e-4/checkpoints/model_ema.pt #
+# data setup
+## dataset
+#train_data_path: /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited_processed/training
+#val_data_path: /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited_processed/validation
+train_data_path: /public_bme/data/jiangzhj2023/projects/Data/deformable_registration_splited_processed/training
+val_data_path: /public_bme/data/jiangzhj2023/projects/Data/deformable_registration_splited_processed/validation
+normalize_type: mean # ["minmax", "mean"]
+use_hq_data: True # True or False
+
+batch_size: 46 # batch size of each GPU, 46 for 80GB MEMORY GPU
+resolution: 256 # resolution of input image
+# precision
+allow_tf32: True
+mixed_precision: bf16 # choices=["no", "fp16", "bf16"]
+# loss type
+loss_type: DISTSLoss # choices=["PerceptualLoss", "PSNRLoss", "DISTSLoss"]
+loss_weight: 5.e-2 # 1.e-4 # 1.0 # 0.1 # 1.e-2 # 1.e-3 # 5.e-2
+reg_type: l1 # l1 or l2
+# optimization
+max_train_steps: 100000 # 100000
+checkpointing_steps: 1000 # 1000
+checkpoints_total_limit: 10
+gradient_accumulation_steps: 1
+learning_rate: 1.e-4 # 1.e-3 # 4.5e-6 # 1.e-4
+adam_beta1: 0.9
+adam_beta2: 0.9
+adam_weight_decay: 0.0
+adam_epsilon: 1.e-8
+max_grad_norm: 1.0
+# seed
+seed: 0
+# dataloader cpu num workers
+num_workers: 8

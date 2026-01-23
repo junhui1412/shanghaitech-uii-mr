@@ -1,0 +1,37 @@
+# logging:
+output_dir: /public_bme2/bme-dgshen/ZhongjianJiang/projects/shanghaitech-uii-mr/runs # ./runs #
+project_name: train_latent_vgg
+exp_name: vgg16_latent_flux2_32c
+logging_dir: logs
+report_to: wandb
+sample_every: 1000 # 1000 # sample every this many steps
+sample_steps: 50 # 200 # sample inference steps
+resume_from_checkpoint: latest
+# model
+vae_type: FLUX.2-dev # choices=["sdxl", "FLUX.1-dev", "FLUX.2-dev"]
+pretrained: null # ./runs/<project_name>/<exp_name>/checkpoints/step_xxx.ckpt
+# data setup
+## dataset
+#train_data_path: /mnt/e/deeplearning/data/computer_vision/imagenet2012/train
+#val_data_path: /mnt/e/deeplearning/data/computer_vision/imagenet2012/val
+train_data_path: /public_bme2/Share200T/ZhongjianJiang/Data/imagenet2012/train
+val_data_path: /public_bme2/Share200T/ZhongjianJiang/Data/imagenet2012/val
+
+batch_size: 256 # batch size of each GPU, * for 80GB MEMORY GPU
+resolution: 256 # resolution of latent input image
+# precision
+allow_tf32: True
+mixed_precision: bf16 # choices=["no", "fp16", "bf16"]
+# optimization
+max_train_steps: 450000 # 100000
+checkpointing_steps: 1000 # 1000
+checkpoints_total_limit: 10
+gradient_accumulation_steps: 1
+learning_rate: 1.e-2
+sgd_momentum: 0.9
+weight_decay: 5.e-4
+max_grad_norm: 1.0
+# seed
+seed: 0
+# dataloader cpu num workers
+num_workers: 8

@@ -1,0 +1,44 @@
+# logging:
+output_dir: /public_bme2/bme-dgshen/ZhongjianJiang/projects/shanghaitech-uii-mr/runs # ./runs #
+project_name: train_lbbdm
+exp_name: unet_320c_vae_16c_lpips
+logging_dir: logs
+report_to: wandb
+sample_every: 1000 # 1000 # sample every this many steps
+sample_steps: 50 # 200 # sample inference steps
+resume_from_checkpoint: latest
+# model
+vae_type: FLUX.1-dev # choices=["sdxl", "FLUX.1-dev", "FLUX.2-dev"]
+pretrained: null # ./runs/<project_name>/<exp_name>/checkpoints/step_xxx.ckpt
+# data setup
+## dataset
+#train_data_path: /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited_processed/training
+#val_data_path: /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited_processed/validation
+train_data_path: /public_bme/data/jiangzhj2023/projects/Data/deformable_registration_splited_processed/training
+val_data_path: /public_bme/data/jiangzhj2023/projects/Data/deformable_registration_splited_processed/validation
+normalize_type: minmax # ["minmax", "mean"]
+use_hq_data: True # True or False
+
+batch_size: 128 # batch size of each GPU, 128 for 80GB MEMORY GPU
+resolution: 256 # resolution of latent input image
+# precision
+allow_tf32: True
+mixed_precision: bf16 # choices=["no", "fp16", "bf16"]
+# loss
+loss_type: l1_lpips1 # choices=["l1", "l2", "l1_lpips1", "l1_lpips2"]
+# optimization
+max_train_steps: 100000 # 100000
+#num_train_epochs: 400
+checkpointing_steps: 1000 # 1000
+checkpoints_total_limit: 10
+gradient_accumulation_steps: 2
+learning_rate: 1.e-4
+adam_beta1: 0.9
+adam_beta2: 0.999
+adam_weight_decay: 0.0
+adam_epsilon: 1.e-8
+max_grad_norm: 1.0
+# seed
+seed: 0
+# dataloader cpu num workers
+num_workers: 8
