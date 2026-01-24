@@ -405,15 +405,10 @@ def main():
 
                         checkpoint_path = checkpoint_dir / f"checkpoint-{global_step}"
                         accelerator.save_state(str(checkpoint_path))
-                        checkpoint = {
-                            "model": accelerator.unwrap_model(model).state_dict(),
-                            "ema": ema.state_dict(),
-                            "opt": optimizer.state_dict(),
-                            "steps": global_step,
-                        }
-                        ema_checkpoint_path = f"{checkpoint_dir}/model_ema.pt"
-                        torch.save(checkpoint, ema_checkpoint_path)
-                        logger.info(f"Saved checkpoint to {checkpoint_path}, ema to {ema_checkpoint_path}")
+
+                        model.save_pretrained(f"{checkpoint_dir}/model")
+                        ema.save_pretrained(f"{checkpoint_dir}/ema_model")
+                        logger.info(f"Saved checkpoint to '{checkpoint_path}', model to '{checkpoint_dir}/model', ema model to '{checkpoint_dir}/ema_model' ")
 
                 if (global_step == 1 or (global_step % args.sample_every == 0 and global_step > 0)):
                     with torch.no_grad():

@@ -18,6 +18,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .arch_util import LayerNorm2d
 from .local_arch import Local_Base
+from diffusers.models.modeling_utils import ModelMixin
+from diffusers.configuration_utils import ConfigMixin, register_to_config
 
 def conv_nd(dims, *args, **kwargs):
     """
@@ -123,8 +125,9 @@ class NAFBlock(nn.Module):
         return y + x * self.gamma
 
 
-class NAFNet(nn.Module):
+class NAFNet(ModelMixin, ConfigMixin):
 
+    @register_to_config
     def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], upsampler_mode='pixel_shuffle'):
         '''
         upsampler_mode: 'pixel_shuffle' or 'interpolate'

@@ -19,7 +19,8 @@ from src.module.bbdm.BrownianBridge.base.modules.diffusionmodules.util import (
     timestep_embedding,
 )
 from src.module.bbdm.BrownianBridge.base.modules.attention import SpatialTransformer
-
+from diffusers.models.modeling_utils import ModelMixin
+from diffusers.configuration_utils import ConfigMixin, register_to_config
 
 # dummy replace
 def convert_module_to_f16(x):
@@ -413,7 +414,7 @@ class QKVAttention(nn.Module):
         return count_flops_attn(model, _x, y)
 
 
-class UNetModel(nn.Module):
+class UNetModel(ModelMixin, ConfigMixin):
     """
     The full UNet model with attention and timestep embedding.
     :param in_channels: channels in the input Tensor.
@@ -443,6 +444,7 @@ class UNetModel(nn.Module):
                                     increased efficiency.
     """
 
+    @register_to_config
     def __init__(
         self,
         image_size,

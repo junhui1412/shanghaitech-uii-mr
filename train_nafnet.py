@@ -382,15 +382,10 @@ def main():
 
                         checkpoint_path = checkpoint_dir / f"checkpoint-{global_step}"
                         accelerator.save_state(str(checkpoint_path))
-                        checkpoint = {
-                            "model": accelerator.unwrap_model(model).state_dict(),
-                            "ema": ema.state_dict(),
-                            "opt": optimizer.state_dict(),
-                            "steps": global_step,
-                        }
-                        ema_checkpoint_path = f"{checkpoint_dir}/model_ema.pt"
-                        torch.save(checkpoint, ema_checkpoint_path)
-                        logger.info(f"Saved checkpoint to {checkpoint_path}, ema to {ema_checkpoint_path}")
+
+                        model.save_pretrained(f"{checkpoint_dir}/model")
+                        ema.save_pretrained(f"{checkpoint_dir}/ema_model")
+                        logger.info(f"Saved checkpoint to '{checkpoint_path}', model to '{checkpoint_dir}/model', ema model to '{checkpoint_dir}/ema_model' ")
 
                 if (global_step == 1 or (global_step % args.sample_every == 0 and global_step > 0)):
                     with torch.no_grad():
@@ -458,7 +453,7 @@ def parse_args():
         "--config",
         type=str,
         # default=None,
-        default="cfg/train_configs/train_nafnet_dists_loss_hq.yaml",
+        default="cfg/train_configs/train_nafnet_dists_loss_hq_uii_all_data.yaml",
         # required=True,
         help="path to config",
     )
@@ -467,7 +462,7 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    # os.environ["CUDA_VISIBLE_DEVICES"] = '0' # TODO: delete after testing
+    os.environ["CUDA_VISIBLE_DEVICES"] = '2' # TODO: delete after testing
     # for wandb logging
     os.environ["WANDB_API_KEY"] = 'd41703d5fb88dbc5ac4d7bdc7bef1f590f2d0460'
     os.environ["WANDB_MODE"] = 'dryrun'

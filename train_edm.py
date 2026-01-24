@@ -322,15 +322,15 @@ def main():
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
     )
-    # lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-    #     optimizer,
-    #     mode='min',
-    #     factor=0.8,
-    #     patience=10000,
-    #     cooldown=10000,
-    #     min_lr=5.e-7,
-    #     verbose=True
-    # )
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='min',
+        factor=0.8,
+        patience=10000,
+        cooldown=10000,
+        min_lr=5.e-7,
+        verbose=True
+    )
 
     # Setup mri data:
     dataloader = create_dataloader(args, accelerator, logger=logger, is_train=True)
@@ -351,8 +351,8 @@ def main():
     global_step = 0
     first_epoch = 0
 
-    model, optimizer, dataloader, val_dataloader = accelerator.prepare(
-        model, optimizer, dataloader, val_dataloader
+    model, optimizer, lr_scheduler, dataloader, val_dataloader = accelerator.prepare(
+        model, optimizer, lr_scheduler, dataloader, val_dataloader
     )
 
     num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
@@ -441,7 +441,7 @@ def main():
                     grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
-                # lr_scheduler.step(loss.item())
+                lr_scheduler.step(loss.item())
 
                 if accelerator.sync_gradients:
                     update_ema(ema, model)  # change ema function
@@ -479,15 +479,10 @@ def main():
 
                         checkpoint_path = checkpoint_dir / f"checkpoint-{global_step}"
                         accelerator.save_state(str(checkpoint_path))
-                        checkpoint = {
-                            "model": accelerator.unwrap_model(model).state_dict(),
-                            "ema": ema.state_dict(),
-                            "opt": optimizer.state_dict(),
-                            "steps": global_step,
-                        }
-                        ema_checkpoint_path = f"{checkpoint_dir}/model_ema.pt"
-                        torch.save(checkpoint, ema_checkpoint_path)
-                        logger.info(f"Saved checkpoint to {checkpoint_path}, ema to {ema_checkpoint_path}")
+
+                        model.save_pretrained(f"{checkpoint_dir}/model")
+                        ema.save_pretrained(f"{checkpoint_dir}/ema_model")
+                        logger.info(f"Saved checkpoint to '{checkpoint_path}', model to '{checkpoint_dir}/model', ema model to '{checkpoint_dir}/ema_model' ")
 
                 if (global_step == 1 or (global_step % args.sample_every == 0 and global_step > 0)):
                     with torch.no_grad():

@@ -19,13 +19,11 @@ conda activate rddm
 
 pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 
-pip install accelerate einops ema-pytorch pydicom wandb omegaconf timm torchmetrics pandas matplotlib # SimpleITK Augmentor
+pip install accelerate einops ema-pytorch pydicom wandb omegaconf timm torchmetrics pandas matplotlib diffusers # SimpleITK Augmentor
 
 pip install scipy scikit-image opencv-python # NAFNet
 
 pip install dists-pytorch # Deep Image Structure and Texture Similarity (DISTS Loss)
-
-pip install diffusers # latent bbdm
 
 pip install transformers # For PixNerDiT
 
