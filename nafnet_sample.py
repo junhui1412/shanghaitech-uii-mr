@@ -409,17 +409,17 @@ def main_single_input(args):
             samples = samples.to(torch.float32)  # [B, 1, H, W]
 
         # # Post process
-        if args.normalize_type == 'minmax':
+        if args.normalize_type in ['minmax', 'mean_minmax']:
             samples = samples * 0.5 + 0.5
         samples = samples[..., pad_info[0]: samples.shape[-2] - pad_info[1], pad_info[2]: samples.shape[-1] - pad_info[3]]
         samples = (samples * input_normalize_value[..., None, None, None]).to(torch.float32)
         # measurement
-        if args.normalize_type == 'minmax':
+        if args.normalize_type in ['minmax', 'mean_minmax']:
             input_images = input_images * 0.5 + 0.5
         input_images = input_images[..., pad_info[0]: input_images.shape[-2] - pad_info[1], pad_info[2]: input_images.shape[-1] - pad_info[3]]
         input_images = (input_images * input_normalize_value[..., None, None, None]).to(torch.float32)
 
-        if args.model_type == 'nafnet_mix':
+        if args.normalize_type in ['minmax', 'mean_minmax']:
             samples = samples * 0.8 + input_images * 0.2
 
         # Save dicom files:
@@ -450,7 +450,7 @@ if __name__ == "__main__":
     parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/aca_test_20260202', type=str, help="Path to the dataset.")
     parser.add_argument("--num-workers", default=8, type=int, help="Number of dataloader workers.")
     parser.add_argument("--resolution", default=256, type=int, choices=[256, 320, 512], help="Image size.")
-    parser.add_argument("--normalize-type", default='mean', type=str, choices=['mean', 'minmax'], help="Normalization type.")
+    parser.add_argument("--normalize-type", default='mean', type=str, choices=['mean', 'minmax', 'mean_minmax'], help="Normalization type.")
     parser.add_argument("--split-batch", default=6, type=int, help="Split batch size to avoid memory issue. 0 means no split.")
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
