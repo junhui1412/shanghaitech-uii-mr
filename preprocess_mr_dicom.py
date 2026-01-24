@@ -55,7 +55,7 @@ def process(data_path):
 
     # Add volume mean to each slice and save back
     for slice_file in slice_files:
-        save_file_path = replace_specific_parent(slice_file, "deformable_registration_splited", "deformable_registration_splited_processed")
+        save_file_path = replace_specific_parent(slice_file, "training_data", "training_data_processed")
         save_file_path.parent.mkdir(parents=True, exist_ok=True)
         slice_ds = pydicom.dcmread(slice_file, force=True)
         # slice_ds.VolumeMeanValue = str(volume_mean)
@@ -82,12 +82,15 @@ def process(data_path):
 
     return f'{str(data_path)} process successfully!'
 
-def multi_process(num_processes=10, split='training'):
+def multi_process(root_path, split='training', num_processes=10):
     import multiprocessing as mp
     from functools import partial
-    root_path = f"/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited/{split}"  # TODO: set your path
     root_path = Path(root_path)
-    subject_dirs = sorted(list(root_path.glob('*/*/*/*/*/')))
+    data_path = root_path / split
+    if split in ["GE", "Philip", "Siemens", "DeepRecon"]:
+        subject_dirs = sorted(list(data_path.glob('*/*/*/*/')))
+    else:
+        subject_dirs = sorted(list(data_path.glob('*/*/*/*/*/')))
 
     processpool = mp.Pool(processes=num_processes)
     main_func = partial(
@@ -497,7 +500,8 @@ def replace_ACA_with_AI():
     pass
 
 if __name__ == '__main__':
-    # multi_process(num_processes=1, split='training') # training, validation, testing
+    root_path = r"../Data/training_data/"
+    multi_process(root_path, split='Siemens', num_processes=20) # shanghaitech: training, validation, testing # uii: GE, Philip, Siemens, DeepRecon
     # plot_images()
     # check_images()
     # read_dicom()
@@ -509,5 +513,5 @@ if __name__ == '__main__':
     # test_read_csv(root=data_path, is_siemens=False)
     # reorganize_directory_structure()
     # move_ACA_results()
-    replace_ACA_with_AI()
+    # replace_ACA_with_AI()
     pass
