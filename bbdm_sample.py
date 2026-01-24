@@ -33,6 +33,8 @@ name2seriesID = {
     'bbdm_unet_256c_dists': 5,
     'bbdm_unet_64c': 13,
     'bbdm_unet_128c': 14,
+    'bbdm_unet_256c_dists_0.1': 15,
+    'bbdm_unet_256c_dists_0.01': 16,
 }
 
 def display_all_images(input_image, sample, output_image, fname, idx, all_image_path):
@@ -306,7 +308,7 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     # data # /public_bme/data/jiangzhj2023/projects/Data/ACA_data_transfer_organized_test # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test # priority_test_data
-    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/aca_test/artifacts', type=str, help="Path to the dataset.")
+    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/priority_test_data', type=str, help="Path to the dataset.")
     parser.add_argument("--num-workers", default=8, type=int, help="Number of dataloader workers.")
     parser.add_argument("--resolution", default=256, type=int, choices=[256, 320, 512], help="Image size.")
     parser.add_argument("--normalize-type", default='minmax', type=str, choices=['mean', 'minmax'], help="Normalization type.")
@@ -314,8 +316,8 @@ if __name__ == "__main__":
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
     parser.add_argument("--sample-steps", default=50, type=int, help="Number of sampling steps.")
-    parser.add_argument("--ckpt", default="./runs/train_bbdm/unet_256c_dists/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='bbdm_unet_256c_dists', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_dists', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
+    parser.add_argument("--ckpt", default="./runs/train_bbdm/unet_256c_dists_0.1/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
+    parser.add_argument("--model-type", default='bbdm_unet_256c_dists_0.1', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_dists', 'bbdm_unet_256c_dists_0.1', 'bbdm_unet_256c_dists_0.01', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
