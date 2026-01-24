@@ -35,6 +35,7 @@ name2seriesID = {
     'bbdm_unet_128c': 14,
     'bbdm_unet_256c_dists_0.1': 15,
     'bbdm_unet_256c_dists_0.01': 16,
+    'bbdm_unet_256c_mean_minmax_normalize': 17,
 }
 
 def display_all_images(input_image, sample, output_image, fname, idx, all_image_path):
@@ -153,10 +154,11 @@ def main(args):
         resblock_updown=True,
         use_spatial_transformer=False,
         condition_key="SpatialRescaler",  # "nocond" "SpatialRescaler"
-    ).to(device)
+    )
     diffusion = BrownianBridgeDiffusion(sample_step=args.sample_steps)
     ckpt_path = args.ckpt
     model = model.from_pretrained(ckpt_path) if Path(ckpt_path).is_dir() else load_pretrained_parameters(model, ckpt_path)
+    model.to(device)
     model.eval()  # important!
 
     # Setup mri data:
@@ -317,7 +319,7 @@ if __name__ == "__main__":
     # model
     parser.add_argument("--sample-steps", default=50, type=int, help="Number of sampling steps.")
     parser.add_argument("--ckpt", default="./runs/train_bbdm/unet_256c_dists_0.1/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='bbdm_unet_256c_dists_0.1', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_dists', 'bbdm_unet_256c_dists_0.1', 'bbdm_unet_256c_dists_0.01', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
+    parser.add_argument("--model-type", default='bbdm_unet_256c_dists_0.1', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_mean_minmax_normalize', 'bbdm_unet_256c_dists', 'bbdm_unet_256c_dists_0.1', 'bbdm_unet_256c_dists_0.01', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
