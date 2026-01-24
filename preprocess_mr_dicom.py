@@ -499,9 +499,22 @@ def replace_ACA_with_AI():
     print("处理完毕！")
     pass
 
+
+def split_deeprecon_test(root_path, split='DeepRecon', dst_path="/data/yuning/zhongjian/Data/DeepRecon_test/"):
+    root_path = Path(root_path)
+    dst_path = Path(dst_path)
+    data_path = root_path / split
+    subject_dirs = sorted(list(data_path.glob('*/*/')))
+    for i, subject in tqdm(enumerate(subject_dirs), total=len(subject_dirs)):
+        if (i + 1) % 5 == 0:
+            dst_file_path = dst_path / subject.parent.name
+            dst_file_path.mkdir(parents=True, exist_ok=True)
+            shutil.move(subject, dst_file_path)
+
+
 if __name__ == '__main__':
     root_path = r"../Data/training_data/"
-    multi_process(root_path, split='Siemens', num_processes=20) # shanghaitech: training, validation, testing # uii: GE, Philip, Siemens, DeepRecon
+    # multi_process(root_path, split='Siemens', num_processes=20) # shanghaitech: training, validation, testing # uii: GE, Philip, Siemens, DeepRecon
     # plot_images()
     # check_images()
     # read_dicom()
@@ -514,4 +527,5 @@ if __name__ == '__main__':
     # reorganize_directory_structure()
     # move_ACA_results()
     # replace_ACA_with_AI()
+    split_deeprecon_test(root_path)
     pass
