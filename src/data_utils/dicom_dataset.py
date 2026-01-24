@@ -11,6 +11,11 @@ from torchvision import transforms
 # from torchvision.utils import save_image
 from tqdm.auto import tqdm
 
+def replace_specific_parent(path: Path, old_name: str, new_name: str) -> Path:
+    parts = list(path.parts)
+    parts = [new_name if part == old_name else part for part in parts]
+    return Path(*parts)
+
 def replace_fast_parent(path: Path) -> Path:
     """
     Replace parent folder name containing _FAST / _FAST2 / ... with cleaned version,
@@ -155,10 +160,10 @@ def auto_replace_scan_folder_test(path: Path) -> Path:
     new_full_path = path_gt / filename
     return new_full_path
 
-def process_subject(subject_dir, is_siemens=False):
+def process_subject(subject_dir, flag="GE_Philip"):
     # Process a single subject directory to get slice file pairs
     file_paths = []
-    if is_siemens:
+    if flag == "Siemens":
         slice_files = list(subject_dir.glob('*.dcm'))
         for slice_file in slice_files:
             gt_slice_file = auto_replace_scan_folder(slice_file)
@@ -167,7 +172,7 @@ def process_subject(subject_dir, is_siemens=False):
             else:
                 print(f"Skipping {slice_file}")
                 return []
-    else:
+    elif flag == "GE_Philip":
         slice_files = subject_dir.glob('IM*')
         for slice_file in slice_files:
             gt_slice_file = replace_fast_parent(slice_file)
@@ -176,6 +181,16 @@ def process_subject(subject_dir, is_siemens=False):
             else:
                 print(f"Skipping {slice_file}")
                 return []
+    elif flag == "DeepRecon":
+        slice_files = list(subject_dir.glob('UID*.dcm'))
+        for slice_file in slice_files:
+            gt_slice_file = replace_specific_parent(slice_file, subject_dir.name, "GT")
+            if gt_slice_file.exists():
+                file_paths.append([slice_file, gt_slice_file])
+            else:
+                print(f"Skipping {slice_file}")
+    else:
+        raise NotImplementedError(f"Unknown flag {flag}")
 
     return file_paths
 
@@ -353,11 +368,15 @@ class MRIDicomDataset(Dataset):
         self.file_paths = []
         # For GE, Philip
         subject_dirs = list(data_path.glob('*/*/*/*/*FAST*/')) if not use_csv else read_filter_csv_file(root, is_siemens=False)
-        self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
+        self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_Philip", max_workers=16) # flag: "GE_Philip", "Siemens", "DeepRecon"
 
         # For Siemens
         subject_dirs = list(data_path.glob('*/*/*/aca*/*/')) if not use_csv else read_filter_csv_file(root, is_siemens=True)
-        self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
+        self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
+
+        # For DeepRecon
+        subject_dirs = list(data_path.glob('*/*/*/UID*/*/')) if not use_csv else read_filter_csv_file(root, is_siemens=True)
+        self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="DeepRecon", max_workers=16)
 
         # sorted file_paths for reproducibility
         self.file_paths = sorted(self.file_paths)
@@ -374,13 +393,13 @@ class MRIDicomDataset(Dataset):
         else:
             raise NotImplementedError(f"normalize_type {self.normalize_type} not implemented.")
 
-    def load_slices_with_threadpool(self, subject_dirs, is_siemens=False, max_workers=8):
+    def load_slices_with_threadpool(self, subject_dirs, flag="GE_Philip", max_workers=8):
         """read all slice files using ThreadPoolExecutor"""
         file_paths = []
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(process_subject, subject, is_siemens=is_siemens)
+                executor.submit(process_subject, subject, flag=flag)
                 for subject in subject_dirs
             ]
 
