@@ -458,6 +458,44 @@ def move_ACA_results():
 
     pass
 
+def replace_ACA_with_AI():
+    # 获取当前工作目录
+    ACA_data_path = r"/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/normal/ACA_test2"  # badGT # normal
+    ACA_data_path = Path(ACA_data_path)
+    suffix = "_ACA"
+    prefix = "AI_"
+
+    print(f"当前操作目录: {ACA_data_path}")
+    print("-" * 40)
+
+    # 使用 rglob("*_ACA") 可以递归搜索，这里用 glob 只搜索当前层级
+    subject_dirs = sorted(list(ACA_data_path.glob('*/*/*/*/*_ACA/')))
+    # iterdir() 遍历当前目录下的所有项
+    for subject_dir in tqdm(subject_dirs, total=len(subject_dirs)):
+        # 确保是文件夹且以 _ACA 结尾
+        if subject_dir.is_dir() and subject_dir.name.endswith(suffix):
+            old_name = subject_dir.name
+
+            # 逻辑：去掉末尾的 _ACA，并在开头加上 AI_
+            # stem 在这里指文件夹名，pathlib 处理字符串非常方便
+            new_name_str = prefix + old_name[:-len(suffix)]
+
+            # 创建新的路径对象
+            new_path = subject_dir.with_name(new_name_str)
+
+            try:
+                if not new_path.exists():
+                    subject_dir.rename(new_path)
+                    print(f"已重命名: {old_name}  =>  {new_path.name}")
+                else:
+                    print(f"跳过: {new_path.name} 已存在")
+            except Exception as e:
+                print(f"重命名 {old_name} 失败: {e}")
+
+    print("-" * 40)
+    print("处理完毕！")
+    pass
+
 if __name__ == '__main__':
     # multi_process(num_processes=1, split='training') # training, validation, testing
     # plot_images()
@@ -470,5 +508,6 @@ if __name__ == '__main__':
     # data_path = r"/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited_processed/training"
     # test_read_csv(root=data_path, is_siemens=False)
     # reorganize_directory_structure()
-    move_ACA_results()
+    # move_ACA_results()
+    replace_ACA_with_AI()
     pass
