@@ -40,6 +40,11 @@ This process will precompute the 'volume mean', 'volume max' and 'volume percent
 ```python
 # uncomment and run the following command in preprocess_mr_dicom.py
 # You can modify the parameters such as 'root_path' in the function 'multi_process' as needed.
+def multi_process(num_processes=10, split='training'):
+    ...
+    root_path = r""
+    ...
+
 if __name__ == '__main__':
       multi_process(num_processes=1, split='training') # training, validation, testing
 ```
