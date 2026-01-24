@@ -156,7 +156,7 @@ def main(args):
     ).to(device)
     diffusion = BrownianBridgeDiffusion(sample_step=args.sample_steps)
     ckpt_path = args.ckpt
-    model = load_pretrained_parameters(model, ckpt_path)
+    model = model.from_pretrained(ckpt_path) if Path(ckpt_path).is_dir() else load_pretrained_parameters(model, ckpt_path)
     model.eval()  # important!
 
     # Setup mri data:

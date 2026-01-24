@@ -681,9 +681,9 @@ class MRIVolumeTestDicomDataset(Dataset):
         ts_mov, ts_fix = ts_mov / ts_mov_normalize_value.view(-1, 1, 1, 1), ts_fix / ts_fix_normalize_value.view(-1, 1, 1, 1)
         if self.normalize_type in ['minmax', 'mean_minmax']:
             ts_mov, ts_fix = ts_mov * 2.0 - 1.0, ts_fix * 2.0 - 1.0
-        h, w = ts_mov.shape[-2:]
-        if h > 512 and w > 512:
-            ts_mov, ts_fix = self.trans(ts_mov), self.trans(ts_fix)
+        # h, w = ts_mov.shape[-2:]
+        # if h > 512 and w > 512:
+        #     ts_mov, ts_fix = self.trans(ts_mov), self.trans(ts_fix)
         return ts_mov, ts_fix, ts_mov_normalize_value, ts_fix_normalize_value, str(subject_mov), str(subject_fix)
 
     # @staticmethod
