@@ -187,8 +187,8 @@ def process_subject(subject_dir, flag="GE_Philip"):
                 file_paths.append([slice_file, gt_slice_file])
             else:
                 print(f"Skipping {slice_file}")
-    else:
-        raise NotImplementedError(f"Unknown flag {flag}")
+    # else:
+    #     raise NotImplementedError(f"Unknown flag {flag}")
 
     return file_paths
 
