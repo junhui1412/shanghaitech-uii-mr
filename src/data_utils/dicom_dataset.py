@@ -385,7 +385,7 @@ class MRIDicomDataset(Dataset):
             self.trans = transforms.Compose([
                 transforms.RandomCrop(resolution, pad_if_needed=True, padding_mode='reflect'),
             ])
-        elif self.normalize_type == 'minmax':
+        elif self.normalize_type in ['minmax', 'mean_minmax']:
             self.trans = transforms.Compose([
                 transforms.RandomCrop(resolution, pad_if_needed=True, padding_mode='reflect'),
                 transforms.Normalize([0.5], [0.5]),
