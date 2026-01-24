@@ -242,7 +242,7 @@ def main(args):
     diffusion = EDMPrecond()
     ckpt_path = args.ckpt
     model = model.from_pretrained(ckpt_path) if Path(ckpt_path).is_dir() else load_pretrained_parameters(model, ckpt_path)
-    model.to(device)
+    model = model.to(device)
     model.eval()  # important!
 
     # Setup mri data:

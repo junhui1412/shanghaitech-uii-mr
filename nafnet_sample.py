@@ -354,9 +354,10 @@ def main_single_input(args):
             'dec_blk_nums': [2, 2, 2, 2],
             'upsampler_mode': 'interpolate',
         }
-    model = define_network(model_kwargs).to(device)
+    model = define_network(model_kwargs)
     ckpt_path = args.ckpt
     model = model.from_pretrained(ckpt_path) if Path(ckpt_path).is_dir() else load_pretrained_parameters(model, ckpt_path)
+    model = model.to(device)
     model.eval()  # important!
 
     # Setup mri data:
