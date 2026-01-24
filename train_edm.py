@@ -498,14 +498,14 @@ def main():
                             samples = samples.to(torch.float32) # [B, 1, H, W]
 
                             # denormalize samples
-                            if args.normalize_type == 'minmax':
+                            if args.normalize_type in ['minmax', 'mean_minmax']:
                                 samples = samples * 0.5 + 0.5
                             samples = samples * input_normalize_value[..., None, None, None]
                             samples = normalize_torch(samples)
                             out_samples = accelerator.gather(samples.to(torch.float32))
                             out_samples_list.append(out_samples)
                             # denormalize gt images
-                            if args.normalize_type == 'minmax':
+                            if args.normalize_type in ['minmax', 'mean_minmax']:
                                 val_output_images = val_output_images * 0.5 + 0.5
                             gt_images = val_output_images * output_normalize_value[..., None, None, None]
                             gt_images = normalize_torch(gt_images)

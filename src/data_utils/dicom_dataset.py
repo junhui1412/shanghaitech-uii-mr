@@ -171,7 +171,6 @@ def process_subject(subject_dir, flag="GE_Philip"):
                 file_paths.append([slice_file, gt_slice_file])
             else:
                 print(f"Skipping {slice_file}")
-                return []
     elif flag == "GE_Philip":
         slice_files = subject_dir.glob('IM*')
         for slice_file in slice_files:
@@ -180,7 +179,6 @@ def process_subject(subject_dir, flag="GE_Philip"):
                 file_paths.append([slice_file, gt_slice_file])
             else:
                 print(f"Skipping {slice_file}")
-                return []
     elif flag == "DeepRecon":
         slice_files = list(subject_dir.glob('UID*.dcm'))
         for slice_file in slice_files:
@@ -653,13 +651,35 @@ class MRIVolumeTestDicomDataset(Dataset):
             except Exception as e:
                 print(f"Error stacking images for {subject_mov}: {e}")
                 raise e
+        elif self.normalize_type == 'mean_minmax':
+            for path_mov in paths_mov:
+                mov_ds = pydicom.dcmread(path_mov, force=True)
+                img_mov = mov_ds.pixel_array.astype(np.float32)
+                img_mov_list.append(img_mov)
+
+            for path_fix in paths_fix:
+                fix_ds = pydicom.dcmread(path_fix, force=True)
+                img_fix = fix_ds.pixel_array.astype(np.float32)
+                img_fix_list.append(img_fix)
+            try:
+                img_mov, img_fix = np.stack(img_mov_list, axis=0), np.stack(img_fix_list, axis=0)
+                img_fix = img_fix[: img_mov.shape[0]]
+                mean_m = np.mean(img_mov)
+                mean_f = np.mean(img_fix)
+                max_m = np.quantile(img_mov, 0.9995)
+                mov_normalize_value_list = [max_m] * img_mov.shape[0]
+                fix_normalize_value_list = [mean_f / mean_m * max_m] * img_fix.shape[0]
+                mov_normalize_value, fix_normalize_value = np.array(mov_normalize_value_list, dtype=np.float32), np.array(fix_normalize_value_list, dtype=np.float32)
+            except Exception as e:
+                print(f"Error stacking images for {subject_mov}: {e}")
+                raise e
         else:
             raise NotImplementedError(f"normalize_type {self.normalize_type} not implemented.")
 
         ts_mov, ts_fix = torch.from_numpy(img_mov).unsqueeze(dim=1), torch.from_numpy(img_fix).unsqueeze(dim=1)
         ts_mov_normalize_value, ts_fix_normalize_value = torch.from_numpy(mov_normalize_value), torch.from_numpy(fix_normalize_value)
         ts_mov, ts_fix = ts_mov / ts_mov_normalize_value.view(-1, 1, 1, 1), ts_fix / ts_fix_normalize_value.view(-1, 1, 1, 1)
-        if self.normalize_type == 'minmax':
+        if self.normalize_type in ['minmax', 'mean_minmax']:
             ts_mov, ts_fix = ts_mov * 2.0 - 1.0, ts_fix * 2.0 - 1.0
         h, w = ts_mov.shape[-2:]
         if h > 512 and w > 512:
