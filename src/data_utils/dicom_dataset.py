@@ -220,7 +220,7 @@ def process_subject_dir(subject_dir, is_siemens=False):
 
     return file_paths
 
-def process_test_subject_dir(subject_dir, is_siemens=False):
+def process_test_subject_dir(subject_dir, is_siemens=False, aca_type=False):
     # Only process the subject directory to get the pair of directories
     match = re.findall('AI_|UII_', subject_dir.name)
     if match:
@@ -229,7 +229,10 @@ def process_test_subject_dir(subject_dir, is_siemens=False):
     file_paths = []
     if is_siemens:
         slice_files = list(subject_dir.glob('*.DCM'))
-        gt_slice_file = auto_replace_scan_folder_test(slice_files[0])
+        if aca_type:
+            gt_slice_file = slice_files[0].parents[1] / 'GT' / slice_files[0].name
+        else:
+            gt_slice_file = auto_replace_scan_folder_test(slice_files[0])
         if gt_slice_file.exists() and gt_slice_file != slice_files:  # check if GT file exists
             gt_subject_dir = gt_slice_file.parents[0]
             file_paths.append([subject_dir, gt_subject_dir])
@@ -238,7 +241,10 @@ def process_test_subject_dir(subject_dir, is_siemens=False):
             return []
     else:
         slice_files = list(subject_dir.glob('IM*'))
-        gt_slice_file = replace_fast_parent(slice_files[0])
+        if aca_type:
+            gt_slice_file = slice_files[0].parents[1] / 'GT' / slice_files[0].name
+        else:
+            gt_slice_file = replace_fast_parent(slice_files[0])
         if gt_slice_file.exists() and gt_slice_file != slice_files:  # check if GT file exists
             gt_subject_dir = gt_slice_file.parents[0]
             file_paths.append([subject_dir, gt_subject_dir])
@@ -568,8 +574,11 @@ class MRIVolumeTestDicomDataset(Dataset):
 
         for data_path in data_path_list:
             self.flag = False
+            self.aca_type = False
             split = data_path.name
             if split in ["ACA_data_transfer_organized_test", "aca_test_20260202"]:
+                if split == "aca_test_20260202":
+                    self.aca_type = True
                 # For GE, Philip
                 subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
                 self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
@@ -600,7 +609,7 @@ class MRIVolumeTestDicomDataset(Dataset):
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(process_test_subject_dir if not self.flag else process_subject_dir, subject, is_siemens=is_siemens)
+                executor.submit(process_test_subject_dir if not self.flag else process_subject_dir, subject, is_siemens=is_siemens, aca_type=self.aca_type)
                 for subject in subject_dirs
             ]
 

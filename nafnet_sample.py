@@ -193,8 +193,8 @@ def main(args):
             new_subject_dir = fname_lq.parent.parent / f"AI_{args.model_type}_{fname_lq.parent.stem}" / fname_lq.stem
         else:
             new_subject_dir = fname_lq.parent / f"AI_{args.model_type}_{fname_lq.stem}"
-        if new_subject_dir.exists(): # already processed
-            continue
+        # if new_subject_dir.exists(): # already processed
+        #     continue
         if args.save_dicom:
             new_subject_dir.mkdir(parents=True, exist_ok=True)
 
@@ -447,15 +447,15 @@ def main_single_input(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser() # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test # badGT_normal_reorganized # priority_test_data # ACA_test2_mini
     # data # /data/yuning/zhongjian/Data/aca_test_20260202/
-    parser.add_argument("--data-path", default='/data/yuning/zhongjian/Data/aca_test_20260202/', type=str, help="Path to the dataset.")
+    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/aca_test_20260202', type=str, help="Path to the dataset.")
     parser.add_argument("--num-workers", default=8, type=int, help="Number of dataloader workers.")
     parser.add_argument("--resolution", default=256, type=int, choices=[256, 320, 512], help="Image size.")
     parser.add_argument("--normalize-type", default='mean', type=str, choices=['mean', 'minmax'], help="Normalization type.")
     parser.add_argument("--split-batch", default=6, type=int, help="Split batch size to avoid memory issue. 0 means no split.")
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
-    parser.add_argument("--ckpt", default="./runs/train_nafnet/dists_loss_5e-2_hq_uii_all_data/checkpoints/model", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_uii_all_data', type=str, choices=['nafnet', 'nafnet_l1_only_hq_lr_1e-4', 'nafnet_dists_loss_1e-3', 'nafnet_dists_loss_1e-4', 'nafnet_dists_loss_1e-4_l2_reg', 'nafnet_dists_loss_1e-4_hq', 'nafnet_dists_loss_1e-4_hq_lr_1e-4', 'nafnet_dists_loss_1.0_hq_lr_1e-4', 'nafnet_dists_loss_0.1_hq_lr_1e-4', 'nafnet_dists_loss_1e-2_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_lr_1e-4', 'nafnet_dists_loss_1e-3_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_uii_all_data', 'nafnet_dists_loss_1e-6', 'nafnet_mix', 'nafnet_perceptual_loss', 'nafnet_max_normalize'], help="Type of diffusion model.")
+    parser.add_argument("--ckpt", default="./runs/train_nafnet/dists_loss_5e-2_hq_lr_1e-4/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
+    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_lr_1e-4', type=str, choices=['nafnet', 'nafnet_l1_only_hq_lr_1e-4', 'nafnet_dists_loss_1e-3', 'nafnet_dists_loss_1e-4', 'nafnet_dists_loss_1e-4_l2_reg', 'nafnet_dists_loss_1e-4_hq', 'nafnet_dists_loss_1e-4_hq_lr_1e-4', 'nafnet_dists_loss_1.0_hq_lr_1e-4', 'nafnet_dists_loss_0.1_hq_lr_1e-4', 'nafnet_dists_loss_1e-2_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_lr_1e-4', 'nafnet_dists_loss_1e-3_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_uii_all_data', 'nafnet_dists_loss_1e-6', 'nafnet_mix', 'nafnet_perceptual_loss', 'nafnet_max_normalize'], help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
