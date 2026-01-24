@@ -196,7 +196,7 @@ def main():
     model = define_network(model_kwargs)
     # load pre-trained model
     if args.pretrained is not None:
-        model = load_pretrained_parameters(model, args.pretrained, logger)
+        model = model.from_pretrained(args.pretrained) if Path(args.pretrained).is_dir() else load_pretrained_parameters(model, args.pretrained, logger)
 
     # For mixed precision training we cast all non-trainable weights (vae, non-lora text_encoder and non-lora dit)
     # to half-precision as these weights are only used for inference, keeping weights in full precision is not required.

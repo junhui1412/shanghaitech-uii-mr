@@ -232,17 +232,17 @@ def main(args):
             samples = samples.to(torch.float32)  # [B, 1, H, W]
 
         # # Post process
-        if args.normalize_type == 'minmax':
+        if args.normalize_type in ['minmax', 'mean_minmax']:
             samples = samples * 0.5 + 0.5
         samples = samples[..., pad_info[0]: samples.shape[-2] - pad_info[1], pad_info[2]: samples.shape[-1] - pad_info[3]]
         samples = (samples * input_normalize_value[..., None, None, None]).to(torch.float32)
         # measurement
-        if args.normalize_type == 'minmax':
+        if args.normalize_type in ['minmax', 'mean_minmax']:
             input_images = input_images * 0.5 + 0.5
         input_images = input_images[..., pad_info[0]: input_images.shape[-2] - pad_info[1], pad_info[2]: input_images.shape[-1] - pad_info[3]]
         input_images = (input_images * input_normalize_value[..., None, None, None]).to(torch.float32)
         # reference
-        if args.normalize_type == 'minmax':
+        if args.normalize_type in ['minmax', 'mean_minmax']:
             output_images = output_images * 0.5 + 0.5
         output_images = (output_images * output_normalize_value[..., None, None, None]).to(torch.float32)
 
