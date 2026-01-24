@@ -462,7 +462,7 @@ def parse_args():
 
 
 if __name__ == "__main__":
-    os.environ["CUDA_VISIBLE_DEVICES"] = '2' # TODO: delete after testing
+    # os.environ["CUDA_VISIBLE_DEVICES"] = '2' # TODO: delete after testing
     # for wandb logging
     os.environ["WANDB_API_KEY"] = 'd41703d5fb88dbc5ac4d7bdc7bef1f590f2d0460'
     os.environ["WANDB_MODE"] = 'dryrun'
