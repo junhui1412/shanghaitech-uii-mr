@@ -480,7 +480,7 @@ def main():
                         checkpoint_path = checkpoint_dir / f"checkpoint-{global_step}"
                         accelerator.save_state(str(checkpoint_path))
 
-                        model.save_pretrained(f"{checkpoint_dir}/model")
+                        accelerator.unwrap_model(model).save_pretrained(f"{checkpoint_dir}/model")
                         ema.save_pretrained(f"{checkpoint_dir}/ema_model")
                         logger.info(f"Saved checkpoint to '{checkpoint_path}', model to '{checkpoint_dir}/model', ema model to '{checkpoint_dir}/ema_model' ")
 
