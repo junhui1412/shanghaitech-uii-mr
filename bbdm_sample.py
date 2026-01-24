@@ -227,7 +227,7 @@ def main(args):
         if args.normalize_type in ['minmax', 'mean_minmax']:
             samples = samples * 0.5 + 0.5
         samples = samples[..., pad_info[0]: samples.shape[-2] - pad_info[1], pad_info[2]: samples.shape[-1] - pad_info[3]]
-        samples = (torch.clip(samples, 0, 1) * input_normalize_value[..., None, None, None]).to(torch.float32)
+        samples = (torch.clip(samples, 0) * input_normalize_value[..., None, None, None]).to(torch.float32)
         # measurement
         if args.normalize_type in ['minmax', 'mean_minmax']:
             input_images = input_images * 0.5 + 0.5
