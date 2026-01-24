@@ -224,7 +224,7 @@ def process_subject_dir(subject_dir, is_siemens=False):
 
 def process_test_subject_dir(subject_dir, is_siemens=False):
     # Only process the subject directory to get the pair of directories
-    match = re.findall('AI_', subject_dir.name)
+    match = re.findall('AI_|UII_', subject_dir.name)
     if match:
         return []
 
@@ -557,7 +557,7 @@ class MRIVolumeTestDicomDataset(Dataset):
         for data_path in data_path_list:
             self.flag = False
             split = data_path.name
-            if split in ["ACA_data_transfer_organized_test"]:
+            if split in ["ACA_data_transfer_organized_test", "aca_test_20260202"]:
                 # For GE, Philip
                 subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
                 self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
