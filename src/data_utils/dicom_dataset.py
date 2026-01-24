@@ -440,6 +440,20 @@ class MRIDicomDataset(Dataset):
             max_f = float(fix_ds[(0x0019, 0x1003)].value) # max_f = np.quantile(img_fix, 0.9995)
             img_fix = img_fix / max_f
             fix_normalize_value = max_f
+        elif self.normalize_type == 'mean_minmax':
+            path_mov, path_fix = self.file_paths[index]
+            mov_ds = pydicom.dcmread(path_mov, force=True)
+            img_mov = mov_ds.pixel_array.astype(np.float32)
+            mean_m = float(mov_ds[(0x0019, 0x1001)].value)
+            max_m = float(mov_ds[(0x0019, 0x1003)].value)
+            img_mov = img_mov / max_m
+            mov_normalize_value = max_m
+
+            fix_ds = pydicom.dcmread(path_fix, force=True)
+            img_fix = fix_ds.pixel_array.astype(np.float32)
+            mean_f = float(fix_ds[(0x0019, 0x1001)].value)
+            fix_normalize_value = mean_f / mean_m * max_m
+            img_fix = img_fix / fix_normalize_value
         else:
             raise NotImplementedError(f"normalize_type {self.normalize_type} not implemented.")
 
