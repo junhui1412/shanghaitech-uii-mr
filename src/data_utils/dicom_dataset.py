@@ -525,30 +525,36 @@ class MRIVolumeDicomDataset(Dataset):
 
 
 class MRIVolumeTestDicomDataset(Dataset):
-    def __init__(self, root, normalize_type='mean'):
-        data_path = Path(root)
+    def __init__(self, root: str | list[str], normalize_type='mean'):
+        if isinstance(root, str):
+            data_path_list = [Path(root)]
+        elif isinstance(root, list):
+            data_path_list = [Path(p) for p in root]
+        else:
+            data_path_list = [root]
         self.normalize_type = normalize_type # 'mean' or 'minmax'
         self.file_paths = []
 
-        self.flag = False
-        split = data_path.name
-        if split in ["ACA_data_transfer_organized_test"]:
-            # For GE, Philip
-            subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
-            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
+        for data_path in data_path_list:
+            self.flag = False
+            split = data_path.name
+            if split in ["ACA_data_transfer_organized_test"]:
+                # For GE, Philip
+                subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
 
-            # For Siemens
-            subject_dirs = sorted(list(data_path.glob('*/*/aca*/')))
-            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
-        else:
-            self.flag = True
-            # For GE, Philip
-            subject_dirs = sorted(list(data_path.glob('*/*/*/*/*FAST*/')))
-            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
+                # For Siemens
+                subject_dirs = sorted(list(data_path.glob('*/*/aca*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
+            else:
+                self.flag = True
+                # For GE, Philip
+                subject_dirs = sorted(list(data_path.glob('*/*/*/*/*FAST*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
 
-            # For Siemens
-            subject_dirs = sorted(list(data_path.glob('*/*/*/aca*/*/')))
-            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
+                # For Siemens
+                subject_dirs = sorted(list(data_path.glob('*/*/*/aca*/*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
         # sorted file_paths for reproducibility
         self.file_paths = sorted(self.file_paths)
 

@@ -443,13 +443,13 @@ def main_single_input(args):
         #     break
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser() # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test # ACA_data_transfer_organized_bad_case # badGT_reorganized # normal_reorganized # badGT_normal_reorganized
+    parser = argparse.ArgumentParser() # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test # badGT_normal_reorganized # priority_test_data # ACA_test2_mini
     # data
-    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/priority_test_data', type=str, help="Path to the dataset.")
+    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/badGT/test_badGT', type=str, help="Path to the dataset.")
     parser.add_argument("--num-workers", default=8, type=int, help="Number of dataloader workers.")
     parser.add_argument("--resolution", default=256, type=int, choices=[256, 320, 512], help="Image size.")
     parser.add_argument("--normalize-type", default='mean', type=str, choices=['mean', 'minmax'], help="Normalization type.")
-    parser.add_argument("--split-batch", default=4, type=int, help="Split batch size to avoid memory issue. 0 means no split.")
+    parser.add_argument("--split-batch", default=6, type=int, help="Split batch size to avoid memory issue. 0 means no split.")
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
     parser.add_argument("--ckpt", default="./runs/train_nafnet/dists_loss_5e-2_hq_lr_1e-4/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")

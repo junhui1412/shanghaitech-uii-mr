@@ -392,8 +392,8 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # data # /public_bme/data/jiangzhj2023/projects/Data/ACA_data_transfer_organized_test # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test
-    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test', type=str, help="Path to the dataset.")
+    # data # /public_bme/data/jiangzhj2023/projects/Data/ACA_data_transfer_organized_test # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test # priority_test_data
+    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/priority_test_data', type=str, help="Path to the dataset.")
     parser.add_argument("--num-workers", default=8, type=int, help="Number of dataloader workers.")
     parser.add_argument("--resolution", default=256, type=int, choices=[256, 320, 512], help="Image size.")
     parser.add_argument("--normalize-type", default='minmax', type=str, choices=['mean', 'minmax'], help="Normalization type.")
@@ -405,8 +405,8 @@ if __name__ == "__main__":
     parser.add_argument("--model-type", default='edm_unet_256c', type=str, choices=['edm_unet_256c'], help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
-    parser.add_argument("--save-dicom", default=False, type=bool, help="Whether to save the sampled images as dicom files.")
-    parser.add_argument("--display-image", default=True, type=bool, help="Whether to save the sampled images as png files for visualization.")
+    parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
+    parser.add_argument("--display-image", default=False, type=bool, help="Whether to save the sampled images as png files for visualization.")
     parser.add_argument("--seed", default=0, type=int, help="Random seed.")
     args = parser.parse_args()
     main(args)

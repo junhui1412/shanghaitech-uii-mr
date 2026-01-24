@@ -460,7 +460,7 @@ def move_ACA_results():
 
 def replace_ACA_with_AI():
     # 获取当前工作目录
-    ACA_data_path = r"/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/normal/ACA_test2"  # badGT # normal
+    ACA_data_path = r"/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/badGT/test_badGT"  # badGT # normal # test_badGT # normal/ACA_test2
     ACA_data_path = Path(ACA_data_path)
     suffix = "_ACA"
     prefix = "AI_"
