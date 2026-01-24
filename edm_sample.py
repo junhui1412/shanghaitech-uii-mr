@@ -18,9 +18,7 @@ from matplotlib import pyplot as plt
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from src.data_utils.dicom_dataset import pad_to_multiple_centered, MRIVolumeTestDicomDataset, \
-    pad_to_target_size_centered
-from src.module.bbdm.BrownianBridge.BrownianBridgeModel import BrownianBridgeDiffusion
+from src.data_utils.dicom_dataset import pad_to_multiple_centered, MRIVolumeTestDicomDataset, pad_to_target_size_centered
 from src.module.bbdm.BrownianBridge.base.modules.diffusionmodules.openaimodel import UNetModel
 
 
@@ -29,10 +27,7 @@ torch.backends.cudnn.allow_tf32 = True
 import argparse
 
 name2seriesID = {
-    'bbdm_unet_256c': 4,
-    'bbdm_unet_256c_dists': 5,
-    'bbdm_unet_64c': 13,
-    'bbdm_unet_128c': 14,
+    'edm_unet_256c': 1,
 }
 
 def display_all_images(input_image, sample, output_image, fname, idx, all_image_path):
@@ -110,6 +105,98 @@ def create_dataloader(args, verbose=True):
     )
     return dataloader
 
+
+class EDMPrecond(torch.nn.Module):
+    def __init__(self,
+        label_dim       = 0,                # Number of class labels, 0 = unconditional.
+        use_fp16        = False,            # Execute the underlying model at FP16 precision?
+        sigma_min       = 0,                # Minimum supported noise level.
+        sigma_max       = float('inf'),     # Maximum supported noise level.
+        sigma_data      = 0.5,              # Expected standard deviation of the training data.
+        P_mean=-1.2,
+        P_std=1.2,
+    ):
+        super().__init__()
+        self.label_dim = label_dim
+        self.use_fp16 = use_fp16
+        self.sigma_min = sigma_min
+        self.sigma_max = sigma_max
+        self.sigma_data = sigma_data
+
+        self.P_mean = P_mean
+        self.P_std = P_std
+
+    def forward(self, model, x, sigma, context=None, class_labels=None, force_fp32=False, **model_kwargs):
+        x = x.to(torch.float32)
+        sigma = sigma.to(torch.float32).reshape(-1, 1, 1, 1)
+        class_labels = None if self.label_dim == 0 else torch.zeros([1, self.label_dim], device=x.device) if class_labels is None else class_labels.to(torch.float32).reshape(-1, self.label_dim)
+        dtype = torch.float16 if (self.use_fp16 and not force_fp32 and x.device.type == 'cuda') else torch.float32
+
+        c_skip = self.sigma_data ** 2 / (sigma ** 2 + self.sigma_data ** 2)
+        c_out = sigma * self.sigma_data / (sigma ** 2 + self.sigma_data ** 2).sqrt()
+        c_in = 1 / (self.sigma_data ** 2 + sigma ** 2).sqrt()
+        c_noise = sigma.log() / 4
+
+        F_x = model((c_in * x).to(dtype), timesteps=c_noise.flatten(), context=context, y=class_labels, **model_kwargs)
+        assert F_x.dtype == dtype
+        D_x = c_skip * x + c_out * F_x.to(torch.float32)
+        return D_x
+
+    def training_losses(self, net, images, context=None, labels=None, augment_pipe=None):
+        loss_dict = {}
+        rnd_normal = torch.randn([images.shape[0], 1, 1, 1], device=images.device)
+        sigma = (rnd_normal * self.P_std + self.P_mean).exp()
+        weight = (sigma ** 2 + self.sigma_data ** 2) / (sigma * self.sigma_data) ** 2
+        y, augment_labels = augment_pipe(images) if augment_pipe is not None else (images, None)
+        n = torch.randn_like(y) * sigma
+        D_yn = self.forward(net, y + n, sigma=sigma, context=context, class_labels=labels)
+        loss = weight * ((D_yn - y) ** 2)
+        loss_dict['loss'] = loss
+        return loss_dict
+
+    def edm_sampler(
+        self, net, latents, context=None, class_labels=None, randn_like=torch.randn_like,
+        num_steps=18, sigma_min=0.002, sigma_max=80, rho=7,
+        S_churn=0, S_min=0, S_max=float('inf'), S_noise=1, second_order=False, dtype=torch.float64,
+    ):
+        # Adjust noise levels based on what's supported by the network.
+        # sigma_min = max(sigma_min, net.sigma_min)
+        # sigma_max = min(sigma_max, net.sigma_max)
+
+        # Time step discretization.
+        step_indices = torch.arange(num_steps, dtype=dtype, device=latents.device)
+        t_steps = (sigma_max ** (1 / rho) + step_indices / (num_steps - 1) * (sigma_min ** (1 / rho) - sigma_max ** (1 / rho))) ** rho
+        t_steps = torch.cat([torch.as_tensor(t_steps), torch.zeros_like(t_steps[:1])]) # t_N = 0
+
+        # Main sampling loop.
+        x_next = latents.to(dtype) * t_steps[0]
+        for i, (t_cur, t_next) in tqdm(enumerate(zip(t_steps[:-1], t_steps[1:])), total=num_steps): # 0, ..., N-1
+            x_cur = x_next
+
+            # Increase noise temporarily.
+            gamma = min(S_churn / num_steps, 2 ** 0.5 - 1) if S_min <= t_cur <= S_max else 0
+            t_hat = torch.as_tensor(t_cur + gamma * t_cur)
+            x_hat = x_cur + (t_hat ** 2 - t_cur ** 2).sqrt() * S_noise * randn_like(x_cur)
+
+            # Euler step.
+            denoised = self.forward(net, x_hat, sigma=t_hat, context=context, class_labels=class_labels).to(dtype)
+            # Restoration-Guided Sampling
+            if t_next > 0.05:
+                d_center = denoised - context
+                denoised = denoised - d_center * ((t_cur / sigma_max) ** 4.0)
+
+            d_cur = (x_hat - denoised) / t_hat
+            x_next = x_hat + (t_next - t_hat) * d_cur
+
+            # Apply 2nd order correction.
+            if second_order and i < num_steps - 1:
+                denoised = self.forward(net, x_next, sigma=t_next, context=context, class_labels=class_labels).to(dtype)
+                d_prime = (x_next - denoised) / t_next
+                x_next = x_hat + (t_next - t_hat) * (0.5 * d_cur + 0.5 * d_prime)
+
+        return x_next
+
+
 def main(args):
     # Setup PyTorch:
     torch.manual_seed(args.seed)
@@ -152,7 +239,7 @@ def main(args):
         use_spatial_transformer=False,
         condition_key="SpatialRescaler",  # "nocond" "SpatialRescaler"
     ).to(device)
-    diffusion = BrownianBridgeDiffusion(sample_step=args.sample_steps)
+    diffusion = EDMPrecond()
     ckpt_path = args.ckpt
     model = load_pretrained_parameters(model, ckpt_path)
     model.eval()  # important!
@@ -181,7 +268,7 @@ def main(args):
             new_subject_dir = fname_lq.parent.parent / f"AI_{args.model_type}_{fname_lq.parent.stem}" / fname_lq.stem
         else:
             new_subject_dir = fname_lq.parent / f"AI_{args.model_type}_{fname_lq.stem}"
-        if new_subject_dir.exists(): # already processed
+        if new_subject_dir.exists():  # already processed
             continue
         if args.save_dicom:
             new_subject_dir.mkdir(parents=True, exist_ok=True)
@@ -209,14 +296,14 @@ def main(args):
             for split in range(num_splits):
                 # Sample images:
                 micro_input_immages = input_images[ssi: ssi+args.split_batch]
-                samples = diffusion.p_sample_loop(model, micro_input_immages, clip_denoised=False)
+                samples = diffusion.edm_sampler(model, torch.randn_like(micro_input_immages), context=micro_input_immages, num_steps=args.sample_steps, dtype=torch.float32)
                 samples = samples.to(torch.float32)  # [B, 1, H, W]
                 ssi += args.split_batch
                 samples_list.append(samples)
             samples = torch.cat(samples_list, dim=0)
         else:
             # sample images:
-            samples = diffusion.p_sample_loop(model, input_images, clip_denoised=False)
+            samples = diffusion.edm_sampler(model, torch.randn_like(input_images), context=input_images, num_steps=args.sample_steps, dtype=torch.float32)
             samples = samples.to(torch.float32)  # [B, 1, H, W]
 
         # # Post process
@@ -245,8 +332,8 @@ def main(args):
                 # modify some fields
                 slice_ds.Rows, slice_ds.Columns = samples.shape[-2:]
                 slice_ds.SeriesDescription = f"AI_{args.model_type}:{slice_ds.SeriesDescription}"
-                slice_ds.SeriesInstanceUID = f'2.{name2seriesID[args.model_type]}.' + slice_ds.SeriesInstanceUID
-                slice_ds.SOPInstanceUID = f'2.{name2seriesID[args.model_type]}.' + slice_ds.SOPInstanceUID
+                slice_ds.SeriesInstanceUID = f'4.{name2seriesID[args.model_type]}.' + slice_ds.SeriesInstanceUID
+                slice_ds.SOPInstanceUID = f'4.{name2seriesID[args.model_type]}.' + slice_ds.SOPInstanceUID
                 slice_ds.SeriesNumber = slice_ds.SeriesNumber + 100 * name2seriesID[args.model_type]
                 # save modified dicom
                 slice_ds.save_as(new_subject_dir / dicom_lq_files[idx + start_idx].name, write_like_original=True)
@@ -305,21 +392,21 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    # data # /public_bme/data/jiangzhj2023/projects/Data/ACA_data_transfer_organized_test # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test # priority_test_data
-    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/priority_test_data', type=str, help="Path to the dataset.")
+    # data # /public_bme/data/jiangzhj2023/projects/Data/ACA_data_transfer_organized_test # /mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test
+    parser.add_argument("--data-path", default='/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized_test', type=str, help="Path to the dataset.")
     parser.add_argument("--num-workers", default=8, type=int, help="Number of dataloader workers.")
     parser.add_argument("--resolution", default=256, type=int, choices=[256, 320, 512], help="Image size.")
     parser.add_argument("--normalize-type", default='minmax', type=str, choices=['mean', 'minmax'], help="Normalization type.")
-    parser.add_argument("--split-batch", default=4, type=int, help="Split batch size to avoid memory issue. 0 means no split.")
+    parser.add_argument("--split-batch", default=2, type=int, help="Split batch size to avoid memory issue. 0 means no split.")
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
     parser.add_argument("--sample-steps", default=50, type=int, help="Number of sampling steps.")
-    parser.add_argument("--ckpt", default="./runs/train_bbdm/unet_256c_dists/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='bbdm_unet_256c_dists', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_dists', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
+    parser.add_argument("--ckpt", default="./runs/train_edm/unet_256c/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
+    parser.add_argument("--model-type", default='edm_unet_256c', type=str, choices=['edm_unet_256c'], help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=False, type=bool, help="Whether to save the sampled images as dicom files.")
-    parser.add_argument("--display-image", default=False, type=bool, help="Whether to save the sampled images as png files for visualization.")
+    parser.add_argument("--display-image", default=True, type=bool, help="Whether to save the sampled images as png files for visualization.")
     parser.add_argument("--seed", default=0, type=int, help="Random seed.")
     args = parser.parse_args()
     main(args)

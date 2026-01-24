@@ -187,7 +187,7 @@ def process_subject_dir(subject_dir, is_siemens=False):
 
     file_paths = []
     if is_siemens:
-        slice_files = list(subject_dir.glob('*.dcm'))
+        slice_files = list(subject_dir.glob('*.dcm')) + list(subject_dir.glob('IM*.DCM'))
         gt_slice_file = auto_replace_scan_folder(slice_files[0])
         if gt_slice_file.exists() and gt_slice_file != slice_files:  # check if GT file exists
             gt_subject_dir = gt_slice_file.parents[0]
@@ -532,7 +532,15 @@ class MRIVolumeTestDicomDataset(Dataset):
 
         self.flag = False
         split = data_path.name
-        if split in ["badGT_normal_reorganized"]:
+        if split in ["ACA_data_transfer_organized_test"]:
+            # For GE, Philip
+            subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
+            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
+
+            # For Siemens
+            subject_dirs = sorted(list(data_path.glob('*/*/aca*/')))
+            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
+        else:
             self.flag = True
             # For GE, Philip
             subject_dirs = sorted(list(data_path.glob('*/*/*/*/*FAST*/')))
@@ -540,14 +548,6 @@ class MRIVolumeTestDicomDataset(Dataset):
 
             # For Siemens
             subject_dirs = sorted(list(data_path.glob('*/*/*/aca*/*/')))
-            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
-        else:
-            # For GE, Philip
-            subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
-            self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
-
-            # For Siemens
-            subject_dirs = sorted(list(data_path.glob('*/*/aca*/')))
             self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
         # sorted file_paths for reproducibility
         self.file_paths = sorted(self.file_paths)
@@ -623,8 +623,8 @@ class MRIVolumeTestDicomDataset(Dataset):
         if self.normalize_type == 'minmax':
             ts_mov, ts_fix = ts_mov * 2.0 - 1.0, ts_fix * 2.0 - 1.0
         h, w = ts_mov.shape[-2:]
-        # if h > 512 and w > 512:
-        #     ts_mov, ts_fix = self.trans(ts_mov), self.trans(ts_fix)
+        if h > 512 and w > 512:
+            ts_mov, ts_fix = self.trans(ts_mov), self.trans(ts_fix)
         return ts_mov, ts_fix, ts_mov_normalize_value, ts_fix_normalize_value, str(subject_mov), str(subject_fix)
 
     # @staticmethod
