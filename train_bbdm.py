@@ -216,7 +216,7 @@ def main():
         )
     else:
         raise NotImplementedError(f"Model backbone '{args.backbone}' is not implemented.")
-    diffusion = BrownianBridgeDiffusion(loss_type=getattr(args, "loss_type", "l1"), sample_step=args.sample_steps, loss_weight=args.loss_weight, device=device)
+    diffusion = BrownianBridgeDiffusion(loss_type=getattr(args, "loss_type", "l1"), sample_step=args.sample_steps, loss_weight=getattr(args, "loss_weight", 1.0), device=device)
     # load pre-trained model
     if args.pretrained is not None:
         model = load_pretrained_parameters(model, args.pretrained, logger)
