@@ -100,8 +100,8 @@ class BrownianBridgeDiffusion(nn.Module):
         else:
             self.steps = torch.arange(self.num_timesteps-1, -1, -1)
 
-    def forward(self, model, x, y, t, context=None):
-        if model.condition_key == "nocond":
+    def forward(self, model, x, y, t, context=None, condition=True):
+        if not condition:
             context = None
         else:
             context = y if context is None else context
@@ -242,8 +242,8 @@ class BrownianBridgeDiffusion(nn.Module):
             return x_tminus_mean + sigma_t * noise, x0_recon
 
     @torch.no_grad()
-    def p_sample_loop(self, model, y, context=None, clip_denoised=True, sample_mid_step=False):
-        if model.condition_key == "nocond":
+    def p_sample_loop(self, model, y, context=None, clip_denoised=True, sample_mid_step=False, condition=True):
+        if not condition:
             context = None
         else:
             context = y if context is None else context
