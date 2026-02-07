@@ -234,6 +234,15 @@ def main():
         eps=args.adam_epsilon,
     )
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.max_train_steps, eta_min=1.e-7)
+    # lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    #     optimizer,
+    #     mode='min',
+    #     factor=0.8,
+    #     patience=10000,
+    #     cooldown=10000,
+    #     min_lr=5.e-7,
+    #     verbose=True
+    # )
 
     # Setup mri data:
     dataloader = create_dataloader(args, accelerator, logger=logger, is_train=True)
@@ -345,6 +354,7 @@ def main():
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
                 lr_scheduler.step()
+                # lr_scheduler.step(loss.item())
 
                 if accelerator.sync_gradients:
                     update_ema(ema, model)  # change ema function
