@@ -359,7 +359,7 @@ def main():
                 ## optimization
                 accelerator.backward(loss_gen)
                 if accelerator.sync_gradients:
-                    params_to_clip = model.parameters()
+                    params_to_clip = list(model.parameters()) + list(loss_func.reg.parameters())
                     grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 optimizer_R_A.step()
@@ -377,6 +377,9 @@ def main():
                 loss_disc, disc_log_dict = loss_func(pred_images, output_images, optimizer_idx=1, global_step=global_step, last_layer=None)
                 ## optimization
                 accelerator.backward(loss_disc)
+                if accelerator.sync_gradients:
+                    params_to_clip = loss_func.discriminator.parameters()
+                    grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer_D_B.step()
 
             # calculate gpu memory usage
