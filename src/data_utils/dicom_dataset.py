@@ -192,9 +192,9 @@ def process_subject(subject_dir, flag="GE_Philip"):
 
     return file_paths
 
-def process_subject_dir(subject_dir, is_siemens=False):
+def process_subject_dir(subject_dir, is_siemens=False, aca_type=None):
     # Only process the subject directory to get the pair of directories
-    match = re.findall('AI_', subject_dir.name)
+    match = re.findall('AI_|UII_|_ACA', subject_dir.name)
     if match:
         return []
 
@@ -222,7 +222,7 @@ def process_subject_dir(subject_dir, is_siemens=False):
 
 def process_test_subject_dir(subject_dir, is_siemens=False, aca_type=False):
     # Only process the subject directory to get the pair of directories
-    match = re.findall('AI_|UII_', subject_dir.name)
+    match = re.findall('AI_|UII_|_ACA', subject_dir.name)
     if match:
         return []
 
