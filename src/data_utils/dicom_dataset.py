@@ -268,7 +268,7 @@ def process_test_subject_dir(subject_dir, flag="GE_Philip", aca_type=False):
             print(f"Skipping {subject_dir}")
             return []
     elif flag == "GE_Philip":
-        slice_files = list(subject_dir.glob('IM*'))
+        slice_files = list(subject_dir.glob('IM*')) + list(subject_dir.glob('*.dcm'))
         if aca_type:
             gt_slice_file = slice_files[0].parents[1] / 'GT' / slice_files[0].name
         else:
