@@ -41,6 +41,7 @@ name2seriesID = {
     'nafnet_dists_loss_5e-2_hq_lr_1e-4': 30,
     'nafnet_l1_only_hq_lr_1e-4': 31,
     'nafnet_dists_loss_5e-2_hq_uii_all_data': 32,
+    'nafnet_mix_dists_loss_5e-2_hq_uii_all_data':33,
     'nafnet_mix': 10,
     'nafnet_perceptual_loss': 22,
     'nafnet_max_normalize': 20,
@@ -246,7 +247,7 @@ def main(args):
             output_images = output_images * 0.5 + 0.5
         output_images = (output_images * output_normalize_value[..., None, None, None]).to(torch.float32)
 
-        if args.model_type == 'nafnet_mix':
+        if args.model_type in ['nafnet_mix', 'nafnet_mix_dists_loss_5e-2_hq_uii_all_data']:
             samples = samples * 0.8 + input_images * 0.2
 
         # Save dicom files:
@@ -456,7 +457,7 @@ if __name__ == "__main__":
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
     parser.add_argument("--ckpt", default="./runs/train_nafnet/dists_loss_5e-2_hq_lr_1e-4/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_lr_1e-4', type=str, choices=['nafnet', 'nafnet_l1_only_hq_lr_1e-4', 'nafnet_dists_loss_1e-3', 'nafnet_dists_loss_1e-4', 'nafnet_dists_loss_1e-4_l2_reg', 'nafnet_dists_loss_1e-4_hq', 'nafnet_dists_loss_1e-4_hq_lr_1e-4', 'nafnet_dists_loss_1.0_hq_lr_1e-4', 'nafnet_dists_loss_0.1_hq_lr_1e-4', 'nafnet_dists_loss_1e-2_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_lr_1e-4', 'nafnet_dists_loss_1e-3_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_uii_all_data', 'nafnet_dists_loss_1e-6', 'nafnet_mix', 'nafnet_perceptual_loss', 'nafnet_max_normalize'], help="Type of diffusion model.")
+    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_lr_1e-4', type=str, choices=['nafnet', 'nafnet_l1_only_hq_lr_1e-4', 'nafnet_dists_loss_1e-3', 'nafnet_dists_loss_1e-4', 'nafnet_dists_loss_1e-4_l2_reg', 'nafnet_dists_loss_1e-4_hq', 'nafnet_dists_loss_1e-4_hq_lr_1e-4', 'nafnet_dists_loss_1.0_hq_lr_1e-4', 'nafnet_dists_loss_0.1_hq_lr_1e-4', 'nafnet_dists_loss_1e-2_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_lr_1e-4', 'nafnet_dists_loss_1e-3_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_uii_all_data', 'nafnet_mix_dists_loss_5e-2_hq_uii_all_data','nafnet_dists_loss_1e-6', 'nafnet_mix', 'nafnet_perceptual_loss', 'nafnet_max_normalize'], help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")

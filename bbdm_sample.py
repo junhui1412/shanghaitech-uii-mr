@@ -36,6 +36,7 @@ name2seriesID = {
     'bbdm_unet_256c_dists_0.1': 15,
     'bbdm_unet_256c_dists_0.01': 16,
     'bbdm_unet_256c_mean_minmax_normalize': 17,
+    'bbdm_unet_256c_dists_0.1_uii_all_data':18,
 }
 
 def display_all_images(input_image, sample, output_image, fname, idx, all_image_path):
@@ -191,6 +192,7 @@ def main(args):
             new_subject_dir.mkdir(parents=True, exist_ok=True)
 
         input_images, output_images, input_normalize_value, output_normalize_value = input_images[0].to(device), output_images[0].to(device), input_normalize_value[0].to(device), output_normalize_value[0].to(device)
+        print(f"Processing {fname_lq.parent.name} {fname_lq.name}, H: {input_images.size(2)}, W: {input_images.size(3)}")
         # Pre process
         input_images, pad_info = pad_to_multiple_centered(input_images, multiple=64, mode='reflect', return_pad_info=True)
 
@@ -318,8 +320,8 @@ if __name__ == "__main__":
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
     parser.add_argument("--sample-steps", default=50, type=int, help="Number of sampling steps.")
-    parser.add_argument("--ckpt", default="./runs/train_bbdm/unet_256c_dists_0.1/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='bbdm_unet_256c_dists_0.1', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_mean_minmax_normalize', 'bbdm_unet_256c_dists', 'bbdm_unet_256c_dists_0.1', 'bbdm_unet_256c_dists_0.01', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
+    parser.add_argument("--ckpt", default="./runs/train_bbdm/unet_256c_dists_0.1_uii_all_data/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
+    parser.add_argument("--model-type", default='bbdm_unet_256c_dists_0.1_uii_all_data', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_mean_minmax_normalize', 'bbdm_unet_256c_dists', 'bbdm_unet_256c_dists_0.1', 'bbdm_unet_256c_dists_0.01', 'bbdm_unet_256c_dists_0.1_uii_all_data', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
@@ -327,3 +329,6 @@ if __name__ == "__main__":
     parser.add_argument("--seed", default=0, type=int, help="Random seed.")
     args = parser.parse_args()
     main(args)
+    # ACA_final_test_data/normalGT/
+    # CUDA_VISIBLE_DEVICES=5 python bbdm_sample.py --model-type 'bbdm_unet_256c_dists_0.1_uii_all_data' --split-batch 4 --ckpt ./runs/train_bbdm/unet_256c_dists_0.1_uii_all_data/checkpoints/model/ --data-path /data/yuning/zhongjian/Data/aca_test_20260202/ --save ./runs --save-dicom True --display-image False
+

@@ -180,9 +180,19 @@ def process_subject(subject_dir, flag="GE_Philip"):
             else:
                 print(f"Skipping {slice_file}")
     elif flag == "DeepRecon":
-        slice_files = list(subject_dir.glob('UID*.dcm'))
+        if subject_dir.name != "GT":
+            slice_files = list(subject_dir.glob('UID*.dcm'))
+            for slice_file in slice_files:
+                gt_slice_file = replace_specific_parent(slice_file, subject_dir.name, "GT")
+                if gt_slice_file.exists():
+                    file_paths.append([slice_file, gt_slice_file])
+                else:
+                    print(f"Skipping {slice_file}")
+    elif flag == "GE_wo_and_w_enhance":
+        slice_files = list(subject_dir.glob('*.dcm'))
         for slice_file in slice_files:
-            gt_slice_file = replace_specific_parent(slice_file, subject_dir.name, "GT")
+            new_subject_dir = re.sub(r"ORIG", "GT", subject_dir.name)
+            gt_slice_file = replace_specific_parent(slice_file, subject_dir.name, new_subject_dir)
             if gt_slice_file.exists():
                 file_paths.append([slice_file, gt_slice_file])
             else:
@@ -192,14 +202,14 @@ def process_subject(subject_dir, flag="GE_Philip"):
 
     return file_paths
 
-def process_subject_dir(subject_dir, is_siemens=False):
+def process_subject_dir(subject_dir, flag="GE_Philip", aca_type=None):
     # Only process the subject directory to get the pair of directories
-    match = re.findall('AI_', subject_dir.name)
+    match = re.findall('AI_|UII|_ACA', subject_dir.name)
     if match:
         return []
 
     file_paths = []
-    if is_siemens:
+    if flag == "Siemens":
         slice_files = list(subject_dir.glob('*.dcm')) + list(subject_dir.glob('IM*.DCM'))
         gt_slice_file = auto_replace_scan_folder(slice_files[0])
         if gt_slice_file.exists() and gt_slice_file != slice_files:  # check if GT file exists
@@ -208,7 +218,7 @@ def process_subject_dir(subject_dir, is_siemens=False):
         else:
             print(f"Skipping {subject_dir}")
             return []
-    else:
+    elif flag == "GE_Philip":
         slice_files = list(subject_dir.glob('IM*'))
         gt_slice_file = replace_fast_parent(slice_files[0])
         if gt_slice_file.exists() and gt_slice_file != slice_files:  # check if GT file exists
@@ -217,17 +227,35 @@ def process_subject_dir(subject_dir, is_siemens=False):
         else:
             print(f"Skipping {subject_dir}")
             return []
+    elif flag == "DeepRecon":
+        if subject_dir.name != "GT":
+            slice_files = list(subject_dir.glob('UID*.dcm'))
+            gt_slice_file = replace_specific_parent(slice_files[0], subject_dir.name, "GT")
+            if gt_slice_file.exists() and gt_slice_file != slice_files:
+                gt_subject_dir = gt_slice_file.parents[0]
+                file_paths.append([subject_dir, gt_subject_dir])
+            else:
+                print(f"Skipping {subject_dir}")
+    elif flag == "GE_wo_and_w_enhance":
+        slice_files = list(subject_dir.glob('*.dcm'))
+        new_subject_dir = re.sub(r"ORIG", "GT", subject_dir.name)
+        gt_slice_file = replace_specific_parent(slice_files[0], subject_dir.name, new_subject_dir)
+        if gt_slice_file.exists() and gt_slice_file != slice_files:
+            gt_subject_dir = gt_slice_file.parents[0]
+            file_paths.append([subject_dir, gt_subject_dir])
+        else:
+            print(f"Skipping {subject_dir}")
 
     return file_paths
 
-def process_test_subject_dir(subject_dir, is_siemens=False, aca_type=False):
+def process_test_subject_dir(subject_dir, flag="GE_Philip", aca_type=False):
     # Only process the subject directory to get the pair of directories
-    match = re.findall('AI_|UII_', subject_dir.name)
+    match = re.findall('AI_|UII|_ACA', subject_dir.name)
     if match:
         return []
 
     file_paths = []
-    if is_siemens:
+    if flag == "Siemens":
         slice_files = list(subject_dir.glob('*.DCM'))
         if aca_type:
             gt_slice_file = slice_files[0].parents[1] / 'GT' / slice_files[0].name
@@ -239,7 +267,7 @@ def process_test_subject_dir(subject_dir, is_siemens=False, aca_type=False):
         else:
             print(f"Skipping {subject_dir}")
             return []
-    else:
+    elif flag == "GE_Philip":
         slice_files = list(subject_dir.glob('IM*'))
         if aca_type:
             gt_slice_file = slice_files[0].parents[1] / 'GT' / slice_files[0].name
@@ -251,6 +279,24 @@ def process_test_subject_dir(subject_dir, is_siemens=False, aca_type=False):
         else:
             print(f"Skipping {subject_dir}")
             return []
+    elif flag == "DeepRecon":
+        if subject_dir.name != "GT":
+            slice_files = list(subject_dir.glob('UID*.dcm'))
+            gt_slice_file = replace_specific_parent(slice_files[0], subject_dir.name, "GT")
+            if gt_slice_file.exists() and gt_slice_file != slice_files:
+                gt_subject_dir = gt_slice_file.parents[0]
+                file_paths.append([subject_dir, gt_subject_dir])
+            else:
+                print(f"Skipping {subject_dir}")
+    elif flag == "GE_wo_and_w_enhance":
+        slice_files = list(subject_dir.glob('*.dcm'))
+        new_subject_dir = re.sub(r"ORIG", "GT", subject_dir.name)
+        gt_slice_file = replace_specific_parent(slice_files[0], subject_dir.name, new_subject_dir)
+        if gt_slice_file.exists() and gt_slice_file != slice_files:
+            gt_subject_dir = gt_slice_file.parents[0]
+            file_paths.append([subject_dir, gt_subject_dir])
+        else:
+            print(f"Skipping {subject_dir}")
 
     return file_paths
 
@@ -379,8 +425,12 @@ class MRIDicomDataset(Dataset):
         self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
 
         # For DeepRecon
-        subject_dirs = list(data_path.glob('*/*/*/UID*/*/')) if not use_csv else read_filter_csv_file(root, is_siemens=True)
+        subject_dirs = list(data_path.glob('*/*/*/UID*/*/'))
         self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="DeepRecon", max_workers=16)
+
+        # For GE_wo_and_w_enhance
+        subject_dirs = list(data_path.glob('*/Anonymized*/*/ORIG*/'))
+        self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_wo_and_w_enhance", max_workers=16)
 
         # sorted file_paths for reproducibility
         self.file_paths = sorted(self.file_paths)
@@ -581,20 +631,29 @@ class MRIVolumeTestDicomDataset(Dataset):
                     self.aca_type = True
                 # For GE, Philip
                 subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
-                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_Philip", max_workers=16)
 
                 # For Siemens
                 subject_dirs = sorted(list(data_path.glob('*/*/aca*/')))
-                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
             else:
                 self.flag = True
                 # For GE, Philip
                 subject_dirs = sorted(list(data_path.glob('*/*/*/*/*FAST*/')))
-                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=False, max_workers=16)
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_Philip", max_workers=16)
 
                 # For Siemens
                 subject_dirs = sorted(list(data_path.glob('*/*/*/aca*/*/')))
-                self.file_paths += self.load_slices_with_threadpool(subject_dirs, is_siemens=True, max_workers=16)
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
+
+                # For DeepRecon
+                subject_dirs = list(data_path.glob('*/*/*/UID*/*/'))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="DeepRecon", max_workers=16)
+
+                # For GE_wo_and_w_enhance
+                subject_dirs = list(data_path.glob('*/Anonymized*/*/ORIG*/'))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_wo_and_w_enhance", max_workers=16)
+
         # sorted file_paths for reproducibility
         self.file_paths = sorted(self.file_paths)
 
@@ -603,13 +662,13 @@ class MRIVolumeTestDicomDataset(Dataset):
             transforms.CenterCrop(512),
         ])
 
-    def load_slices_with_threadpool(self, subject_dirs, is_siemens=False, max_workers=8):
+    def load_slices_with_threadpool(self, subject_dirs, flag="GE_Philip", max_workers=8):
         """read all slice files using ThreadPoolExecutor"""
         file_paths = []
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
             futures = [
-                executor.submit(process_test_subject_dir if not self.flag else process_subject_dir, subject, is_siemens=is_siemens, aca_type=self.aca_type)
+                executor.submit(process_test_subject_dir if not self.flag else process_subject_dir, subject, flag=flag, aca_type=self.aca_type)
                 for subject in subject_dirs
             ]
 
@@ -769,8 +828,8 @@ class SingleMRIVolumeTestDicomDataset(Dataset):
 
 if __name__ == '__main__':
     # dataset = MriTrainConDataset(data_path=r'/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited/training')
-    # dataset = MRIDicomDataset(root=r'/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited_processed/training')
-    dataset = MRIVolumeTestDicomDataset(root=r'/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized')
+    dataset = MRIDicomDataset(root=r'/data/yuning/zhongjian/Data/training_data_processed/')
+    # dataset = MRIVolumeTestDicomDataset(root=r'/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/ACA_data_transfer_organized')
     # data = dataset[0]
     for i, data in tqdm(enumerate(dataset), total=len(dataset)):
         pass

@@ -23,8 +23,7 @@ import math
 from torchvision.utils import make_grid
 
 from src.module.nafnet.models.archs import define_network
-from src.module.nafnet.models.losses.losses import MRIPSNRLoss, MRIPerceptualLoss, DISTSLoss, \
-    DISTSLossWithDiscriminatorAndRegistration
+from src.module.nafnet.models.losses.losses import DISTSLossWithDiscriminator
 
 
 def normalize_torch(img):
@@ -217,15 +216,12 @@ def main():
         torch.backends.cudnn.allow_tf32 = True
 
     # Setup loss function:
-    loss_func = DISTSLossWithDiscriminatorAndRegistration(disc_start=0, disc_weight=0.5, dists_weight=getattr(args, "dists_weight", 0.05), device=device, weight_dtype=weight_dtype)
+    loss_func = DISTSLossWithDiscriminator(disc_start=0, disc_weight=0.5, dists_weight=getattr(args, "dists_weight", 0.05), device=device, weight_dtype=weight_dtype)
     requires_grad(loss_func.discriminator, True)
-    requires_grad(loss_func.reg, True)
 
     if accelerator.is_main_process:
         logger.info(f"NAFNet Model Parameters: {sum(p.numel() for p in model.parameters()):,}")
         logger.info(f"Discriminator Parameters: {sum(p.numel() for p in loss_func.discriminator.parameters()):,}")
-        logger.info(f"Registration Network Parameters: {sum(p.numel() for p in loss_func.reg.parameters()):,}")
-
 
     # Setup optimizer and learning rate scheduler:
     optimizer = torch.optim.Adam(
@@ -238,13 +234,6 @@ def main():
     # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.max_train_steps, eta_min=1.e-7)
     optimizer_D_B = torch.optim.Adam(
         loss_func.discriminator.parameters(),
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
-    )
-    optimizer_R_A = torch.optim.Adam(
-        loss_func.reg.parameters(),
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
@@ -270,8 +259,8 @@ def main():
     global_step = 0
     first_epoch = 0
 
-    model, loss_func.discriminator, loss_func.reg, optimizer, optimizer_D_B, optimizer_R_A, dataloader, val_dataloader = accelerator.prepare(
-        model, loss_func.discriminator, loss_func.reg, optimizer, optimizer_D_B, optimizer_R_A, dataloader, val_dataloader
+    model, loss_func.discriminator, optimizer, optimizer_D_B, dataloader, val_dataloader = accelerator.prepare(
+        model, loss_func.discriminator, optimizer, optimizer_D_B, dataloader, val_dataloader
     )
 
     num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
@@ -348,11 +337,9 @@ def main():
             input_images, output_images = input_images.to(device), output_images.to(device)
             model.train()
 
-            with accelerator.accumulate([model, loss_func.reg]):
+            with accelerator.accumulate(model):
                 optimizer.zero_grad()
-                optimizer_R_A.zero_grad()
                 pred_images = model(input_images)
-                requires_grad(loss_func.reg, True)
                 requires_grad(loss_func.discriminator, False)
                 loss_gen, gen_log_dict = loss_func(pred_images, output_images, optimizer_idx=0, global_step=global_step, last_layer=accelerator.unwrap_model(model).ending.weight)
 
@@ -362,7 +349,6 @@ def main():
                     params_to_clip = model.parameters()
                     grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
-                optimizer_R_A.step()
                 # lr_scheduler.step()
 
                 if accelerator.sync_gradients:
@@ -372,7 +358,6 @@ def main():
                 optimizer_D_B.zero_grad()
                 with torch.no_grad():
                     pred_images = model(input_images)
-                requires_grad(loss_func.reg, False)
                 requires_grad(loss_func.discriminator, True)
                 loss_disc, disc_log_dict = loss_func(pred_images, output_images, optimizer_idx=1, global_step=global_step, last_layer=None)
                 ## optimization
@@ -485,7 +470,7 @@ def parse_args():
         "--config",
         type=str,
         # default=None,
-        default="cfg/train_configs/train_nafnet_dists_loss_reggan_hq_test.yaml",
+        default="cfg/train_configs/train_nafnet_dists_loss_gan_hq_test.yaml",
         # required=True,
         help="path to config",
     )

@@ -306,7 +306,7 @@ class DISTSLossWithDiscriminatorAndRegistration(nn.Module):
     DISTS loss with discriminator and registration network.
     """
     def __init__(self, disc_start, logvar_init=0.0, disc_factor=1.0, disc_weight=1.0, dists_weight=1.0, disc_loss="hinge",
-                 corr_weight=20., smooth_weight=10., device='cpu', weight_dtype=torch.float32):
+                 smooth_weight=10., device='cpu', weight_dtype=torch.float32):
         super().__init__()
         from DISTS_pytorch import DISTS
         from src.module.reggan.discriminator import Discriminator
@@ -317,7 +317,6 @@ class DISTSLossWithDiscriminatorAndRegistration(nn.Module):
         self.dists_weight = dists_weight
 
         self.discriminator = Discriminator(input_nc=1).to(device).to(weight_dtype)
-        self.corr_weight = corr_weight
         self.discriminator_iter_start = disc_start
         self.disc_loss = hinge_d_loss if disc_loss == "hinge" else vanilla_d_loss
         self.disc_factor = disc_factor
@@ -341,8 +340,6 @@ class DISTSLossWithDiscriminatorAndRegistration(nn.Module):
         return d_weight
 
     def forward(self, pred, target, optimizer_idx, global_step, last_layer=None, split="train"):
-        term = {}
-
         max_val = torch.amax(target, dim=(1, 2, 3))
         max_val = max_val.clamp(min=1e-6)
         normalize_target = target / max_val.view(-1, 1, 1, 1)
@@ -405,3 +402,94 @@ class DISTSLossWithDiscriminatorAndRegistration(nn.Module):
                    }
             return d_loss, log
 
+
+class DISTSLossWithDiscriminator(nn.Module):
+    """
+    DISTS loss with discriminator.
+    """
+    def __init__(self, disc_start, logvar_init=0.0, disc_factor=1.0, disc_weight=1.0, dists_weight=1.0, disc_loss="hinge",
+                 device='cpu', weight_dtype=torch.float32):
+        super().__init__()
+        from DISTS_pytorch import DISTS
+        from src.module.reggan.discriminator import Discriminator
+
+        self.logvar = nn.Parameter(torch.ones(size=()) * logvar_init).to(device)
+        self.dists_loss = DISTS().to(device).eval()
+        self.dists_weight = dists_weight
+
+        self.discriminator = Discriminator(input_nc=1).to(device).to(weight_dtype)
+        self.discriminator_iter_start = disc_start
+        self.disc_loss = hinge_d_loss if disc_loss == "hinge" else vanilla_d_loss
+        self.disc_factor = disc_factor
+        self.discriminator_weight = disc_weight
+
+    def calculate_adaptive_weight(self, nll_loss, g_loss, last_layer=None):
+        if last_layer is not None:
+            nll_grads = torch.autograd.grad(nll_loss, last_layer, retain_graph=True)[0]
+            g_grads = torch.autograd.grad(g_loss, last_layer, retain_graph=True)[0]
+        else:
+            nll_grads = torch.autograd.grad(nll_loss, self.last_layer[0], retain_graph=True)[0]
+            g_grads = torch.autograd.grad(g_loss, self.last_layer[0], retain_graph=True)[0]
+
+        d_weight = torch.norm(nll_grads) / (torch.norm(g_grads) + 1.e-4)
+        d_weight = torch.clamp(d_weight, 0.0, 1e4).detach()
+        d_weight = d_weight * self.discriminator_weight
+        return d_weight
+
+    def forward(self, pred, target, optimizer_idx, global_step, last_layer=None, split="train"):
+        max_val = torch.amax(target, dim=(1, 2, 3))
+        max_val = max_val.clamp(min=1e-6)
+        normalize_target = target / max_val.view(-1, 1, 1, 1)
+        normalize_pred = pred / max_val.view(-1, 1, 1, 1)
+
+        if optimizer_idx == 0:
+            rec_loss = torch.abs(normalize_target.contiguous() - normalize_pred.contiguous())
+            if self.dists_weight > 0:
+                normalize_target_3c = normalize_target.repeat(1, 3, 1, 1)
+                normalize_pred_3c = normalize_pred.repeat(1, 3, 1, 1)
+                p_loss = self.dists_loss(normalize_target_3c, normalize_pred_3c, require_grad=True, batch_average=False)
+                rec_loss = rec_loss + self.dists_weight * p_loss.view(-1, 1, 1, 1)
+
+            nll_loss = rec_loss / torch.exp(self.logvar) + self.logvar
+            nll_loss = torch.sum(nll_loss) / nll_loss.shape[0]
+
+            # now the GAN part
+            # generator update
+            logits_fake = self.discriminator(normalize_pred.contiguous())
+            g_loss = - torch.mean(logits_fake)
+
+            if self.disc_factor > 0.0:
+                try:
+                    d_weight = self.calculate_adaptive_weight(nll_loss, g_loss, last_layer=last_layer)
+                except RuntimeError:
+                    assert not self.training
+                    d_weight = torch.tensor(0.0)
+            else:
+                d_weight = torch.tensor(0.0)
+
+            disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
+            loss = nll_loss + d_weight * disc_factor * g_loss
+
+            log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
+                   "{}/logvar".format(split): self.logvar.detach(),
+                   "{}/nll_loss".format(split): nll_loss.detach().mean(),
+                   "{}/rec_loss".format(split): rec_loss.detach().mean(),
+                   "{}/d_weight".format(split): d_weight.detach(),
+                   "{}/disc_factor".format(split): torch.tensor(disc_factor),
+                   "{}/g_loss".format(split): g_loss.detach().mean(),
+                   }
+            return loss, log
+
+        if optimizer_idx == 1:
+            # second pass for discriminator update
+            logits_real = self.discriminator(normalize_target.contiguous().detach())
+            logits_fake = self.discriminator(normalize_pred.contiguous().detach())
+
+            disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
+            d_loss = disc_factor * self.disc_loss(logits_real, logits_fake)
+
+            log = {"{}/disc_loss".format(split): d_loss.clone().detach().mean(),
+                   "{}/logits_real".format(split): logits_real.detach().mean(),
+                   "{}/logits_fake".format(split): logits_fake.detach().mean()
+                   }
+            return d_loss, log

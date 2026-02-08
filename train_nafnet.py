@@ -233,7 +233,7 @@ def main():
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
     )
-    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.max_train_steps, eta_min=1.e-7)
+    # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.max_train_steps, eta_min=1.e-7)
     # lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     #     optimizer,
     #     mode='min',
@@ -263,8 +263,11 @@ def main():
     global_step = 0
     first_epoch = 0
 
-    model, optimizer, lr_scheduler, dataloader, val_dataloader = accelerator.prepare(
-        model, optimizer, lr_scheduler, dataloader, val_dataloader
+    # model, optimizer, lr_scheduler, dataloader, val_dataloader = accelerator.prepare(
+    #     model, optimizer, lr_scheduler, dataloader, val_dataloader
+    # )
+    model, optimizer, dataloader, val_dataloader = accelerator.prepare(
+        model, optimizer, dataloader, val_dataloader
     )
 
     num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
@@ -353,7 +356,7 @@ def main():
                     grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 optimizer.zero_grad(set_to_none=True)
-                lr_scheduler.step()
+                # lr_scheduler.step()
                 # lr_scheduler.step(loss.item())
 
                 if accelerator.sync_gradients:
