@@ -406,7 +406,7 @@ def main():
             input_images, output_images = input_images.to(device), output_images.to(device)
             model.train()
 
-            with accelerator.accumulate([model, loss_func.reg]):
+            with accelerator.accumulate([model, loss_func.reg, loss_func.discriminator]):
                 loss_func.reg.train()
                 loss_func.discriminator.eval()
                 optimizer.zero_grad()
@@ -415,6 +415,7 @@ def main():
                 loss_gen, gen_log_dict = loss_func(pred_images, output_images, optimizer_idx=0, global_step=global_step, last_layer=accelerator.unwrap_model(model).ending.weight)
 
                 ## optimization
+                ### generator, registration
                 accelerator.backward(loss_gen)
                 if accelerator.sync_gradients:
                     if args.max_grad_norm > 0.0:
@@ -422,12 +423,14 @@ def main():
                         accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 optimizer_R_A.step()
-                # lr_scheduler.step()
+                lr_scheduler.step()
+                lr_scheduler_R_A.step()
 
                 if accelerator.sync_gradients:
                     update_ema(ema, model, decay=args.ema_decay)  # change ema function
 
-            with accelerator.accumulate(loss_func.discriminator):
+                ### discriminator
+            # with accelerator.accumulate(loss_func.discriminator):
                 loss_func.reg.eval()
                 loss_func.discriminator.train()
                 optimizer_D_B.zero_grad()
@@ -437,7 +440,7 @@ def main():
                 ## optimization
                 accelerator.backward(loss_disc)
                 optimizer_D_B.step()
-                lr_scheduler.step()
+                lr_scheduler_D_B.step()
 
             # calculate gpu memory usage
             mem = f'{torch.cuda.memory_reserved() / 2 ** 30 if torch.cuda.is_available() else 0.0:.3g}G'
@@ -519,11 +522,13 @@ def main():
                     "loss_gen": accelerator.gather(loss_gen).mean().detach().item(),
                     "loss_disc": accelerator.gather(loss_disc).mean().detach().item(),
                     "lr": optimizer.param_groups[0]['lr'],
+                    "lr_R_A": optimizer_R_A.param_groups[0]['lr'],
+                    "lr_D_B": optimizer_D_B.param_groups[0]['lr'],
                     "gpu_memory": mem,
                 }
                 if accelerator.is_main_process:
                     progress_bar.set_postfix(**logs)
-                    # accelerator.log(logs, step=global_step)
+                    accelerator.log(logs, step=global_step)
                     accelerator.log({**gen_log_dict, **disc_log_dict}, step=global_step)
 
             if global_step >= args.max_train_steps:
