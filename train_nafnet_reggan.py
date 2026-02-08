@@ -1,5 +1,4 @@
 import argparse
-import re
 from copy import deepcopy
 import logging
 import os
@@ -9,6 +8,8 @@ from collections import OrderedDict
 import shutil
 
 import torch
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LambdaLR
 from omegaconf import OmegaConf
 from tqdm.auto import tqdm
 from torch.utils.data import DataLoader
@@ -20,12 +21,12 @@ from src.data_utils.dicom_dataset import MRIDicomDataset
 
 import wandb
 import math
+from typing import Any, Dict
 from torchvision.utils import make_grid
 
 from src.module.nafnet.models.archs import define_network
-from src.module.nafnet.models.losses.losses import MRIPSNRLoss, MRIPerceptualLoss, DISTSLoss, \
-    DISTSLossWithDiscriminatorAndRegistration
-
+from src.module.nafnet.models.losses.losses import DISTSLossWithDiscriminatorAndRegistration
+# import matplotlib.pyplot as plt
 
 def normalize_torch(img):
     """ Normalize img in arbitrary range to [0, 1] """
@@ -40,14 +41,6 @@ def array2grid(x):
     x = x.mul(255).clamp_(0, 255).permute(1, 2, 0).to('cpu', torch.uint8).numpy()
     return x
 
-@torch.no_grad()
-def sample_posterior(moments, latents_scale=1., latents_bias=0.):
-    device = moments.device
-
-    mean, std = torch.chunk(moments, 2, dim=1)
-    z = mean + std * torch.randn_like(mean)
-    z = (z * latents_scale + latents_bias)
-    return z
 
 @torch.no_grad()
 def update_ema(ema_model, model, decay=0.995):
@@ -108,13 +101,74 @@ def replace_specific_parent(path: Path, old_name: str, new_name: str) -> Path:
     parts = [new_name if part == old_name else part for part in parts]
     return Path(*parts)
 
-def rename_with_increment(filename):
-    # Match files that end with _three-digit-number.npy
-    match = re.match(r"^(.*_)(\d{3})(\.npy)$", filename)
-    prefix, index, suffix = match.groups()
-    new_index = f"{int(index) + 1:03d}"  # Increment and format as three digits
-    new_name = f"{prefix}{new_index}{suffix}"
-    return new_name
+def build_scheduler(
+    optimizer: Optimizer,
+    steps_per_epoch: int,
+    scheduler_cfg: Dict[str, Any],
+) -> tuple[LambdaLR, str]:
+    """
+    Create a learning rate scheduler with optional warmup. Supports 'linear' and 'cosine'.
+    """
+    schedule_type = scheduler_cfg.get("type", "linear").lower()
+
+    base_lr = float(optimizer.param_groups[0]["lr"])
+    final_lr = float(scheduler_cfg.get("final_lr", base_lr))
+    final_ratio = final_lr / base_lr if base_lr > 0 else 1.0
+
+    warmup_steps_cfg = scheduler_cfg.get("warmup_steps")
+    warmup_from_zero = bool(scheduler_cfg.get("warmup_from_zero", False))
+    if warmup_steps_cfg is not None:
+        warmup_steps = int(warmup_steps_cfg)
+    else:
+        warmup_epochs = float(scheduler_cfg.get("warmup_epochs", 0))
+        warmup_steps = int(warmup_epochs * steps_per_epoch)
+
+    decay_end_steps_cfg = scheduler_cfg.get("decay_end_steps")
+    if decay_end_steps_cfg is not None:
+        decay_end_steps = int(decay_end_steps_cfg)
+    else:
+        decay_end_epoch = float(scheduler_cfg.get("decay_end_epoch", warmup_steps / steps_per_epoch if steps_per_epoch else 0))
+        decay_end_steps = int(decay_end_epoch * steps_per_epoch)
+
+    warmup_steps = max(warmup_steps, 0)
+    decay_end_steps = max(decay_end_steps, warmup_steps)
+    total_decay_steps = max(decay_end_steps - warmup_steps, 1)
+
+    for group in optimizer.param_groups:
+        group["lr"] = base_lr
+
+    if schedule_type == "linear":
+
+        def lr_lambda(step: int) -> float:
+            if step < warmup_steps:
+                if warmup_from_zero:
+                    return (step + 1) / warmup_steps
+                else:
+                    return 1.0 # constant lr during warmup
+            if step >= decay_end_steps:
+                return final_ratio
+            progress = (step - warmup_steps) / total_decay_steps
+            return 1.0 - (1.0 - final_ratio) * progress
+
+    elif schedule_type == "cosine":
+
+        def lr_lambda(step: int) -> float:
+            if step < warmup_steps:
+                if warmup_from_zero:
+                    return (step + 1) / warmup_steps
+                else:
+                    return 1.0 # constant lr during warmup
+            if step >= decay_end_steps:
+                return final_ratio
+            progress = (step - warmup_steps) / total_decay_steps
+            cosine = 0.5 * (1.0 + math.cos(math.pi * progress))
+            return final_ratio + (1.0 - final_ratio) * cosine
+    else:
+        raise ValueError(f"Unsupported scheduler '{schedule_type}'. Choose from ['linear', 'cosine'].")
+    scheduler = LambdaLR(optimizer, lr_lambda=lr_lambda)
+    # return some debug msg for optimizer/scheduler
+    sched_msg = f"Scheduler: {schedule_type} with warmup_steps={warmup_steps}, decay_end_steps={decay_end_steps}, final_lr={final_lr}, base_lr={base_lr}, warmup_from_zero={warmup_from_zero}"
+    return scheduler, sched_msg
 
 def create_dataloader(args, accelerator, logger=None, is_train=True):
     if is_train:
@@ -216,8 +270,19 @@ def main():
         torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.allow_tf32 = True
 
+    # Setup mri data:
+    dataloader = create_dataloader(args, accelerator, logger=logger, is_train=True)
+    val_dataloader = create_dataloader(args, accelerator, logger=logger, is_train=False)
+
+    # Scheduler and math around the number of training steps.
+    num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
+    if getattr(args, "max_train_steps", None) is None:
+        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
+    else:
+        args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
+
     # Setup loss function:
-    loss_func = DISTSLossWithDiscriminatorAndRegistration(disc_start=0, disc_weight=0.5, dists_weight=getattr(args, "dists_weight", 0.05), device=device, weight_dtype=weight_dtype)
+    loss_func = DISTSLossWithDiscriminatorAndRegistration(disc_start=getattr(args, "disc_start", 0) * num_update_steps_per_epoch, disc_weight=getattr(args, "disc_weight", 0.75), dists_weight=getattr(args, "dists_weight", 0.05), device=device, weight_dtype=weight_dtype)
     requires_grad(loss_func.discriminator, True)
     requires_grad(loss_func.reg, True)
 
@@ -226,58 +291,56 @@ def main():
         logger.info(f"Discriminator Parameters: {sum(p.numel() for p in loss_func.discriminator.parameters()):,}")
         logger.info(f"Registration Network Parameters: {sum(p.numel() for p in loss_func.reg.parameters()):,}")
 
-
     # Setup optimizer and learning rate scheduler:
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.AdamW(
         model.parameters(),
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
     )
-    # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.max_train_steps, eta_min=1.e-7)
-    optimizer_D_B = torch.optim.Adam(
+    optimizer_D_B = torch.optim.AdamW(
         loss_func.discriminator.parameters(),
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
     )
-    optimizer_R_A = torch.optim.Adam(
+    optimizer_R_A = torch.optim.AdamW(
         loss_func.reg.parameters(),
         lr=args.learning_rate,
         betas=(args.adam_beta1, args.adam_beta2),
         weight_decay=args.adam_weight_decay,
         eps=args.adam_epsilon,
     )
-
-    # Setup mri data:
-    dataloader = create_dataloader(args, accelerator, logger=logger, is_train=True)
-    val_dataloader = create_dataloader(args, accelerator, logger=logger, is_train=False)
-
+    lr_scheduler, msg_sched = build_scheduler(optimizer, num_update_steps_per_epoch, args.lr_scheduler)
+    if accelerator.is_main_process:
+        logger.info(msg_sched)
+    lr_scheduler_D_B, msg_sched_D_B = build_scheduler(optimizer_D_B, num_update_steps_per_epoch, args.lr_scheduler)
+    if accelerator.is_main_process:
+        logger.info(msg_sched_D_B)
+    lr_scheduler_R_A, msg_sched_R_A = build_scheduler(optimizer_R_A, num_update_steps_per_epoch, args.lr_scheduler)
+    if accelerator.is_main_process:
+        logger.info(msg_sched_R_A)
     # Prepare models for training:
     update_ema(ema, model, decay=0)  # Ensure EMA is initialized with synced weights
     model.train()  # important! This enables embedding dropout for classifier-free guidance
     ema.eval()  # EMA model should always be in eval mode
 
-    # Scheduler and math around the number of training steps.
-    overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        overrode_max_train_steps = True
-
     global_step = 0
     first_epoch = 0
 
-    model, loss_func.discriminator, loss_func.reg, optimizer, optimizer_D_B, optimizer_R_A, dataloader, val_dataloader = accelerator.prepare(
-        model, loss_func.discriminator, loss_func.reg, optimizer, optimizer_D_B, optimizer_R_A, dataloader, val_dataloader
+    (
+        model, loss_func.discriminator, loss_func.reg,
+        optimizer, optimizer_D_B, optimizer_R_A,
+        lr_scheduler, lr_scheduler_D_B, lr_scheduler_R_A,
+        dataloader, val_dataloader
+    ) = accelerator.prepare(
+        model, loss_func.discriminator, loss_func.reg,
+        optimizer, optimizer_D_B, optimizer_R_A,
+        lr_scheduler, lr_scheduler_D_B, lr_scheduler_R_A,
+        dataloader, val_dataloader
     )
-
-    num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
-    if overrode_max_train_steps:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
     if accelerator.is_main_process:
         tracker_config = OmegaConf.to_container(args, resolve=True)
@@ -336,11 +399,6 @@ def main():
         disable=not accelerator.is_local_main_process,
     )
 
-    # # Create sampling noise (feel free to change):
-    # total_batch_size = 64 if 8 * accelerator.num_processes >= 64 else 8 * accelerator.num_processes
-    # sample_batch_size = total_batch_size // accelerator.num_processes
-    # xT = torch.randn((sample_batch_size, 2, args.resolution, args.resolution), device=device)
-
     for epoch in range(first_epoch, args.num_train_epochs):
         for step, batch in enumerate(dataloader):
             # data preparation
@@ -349,37 +407,35 @@ def main():
             model.train()
 
             with accelerator.accumulate([model, loss_func.reg]):
+                loss_func.reg.train()
+                loss_func.discriminator.eval()
                 optimizer.zero_grad()
                 optimizer_R_A.zero_grad()
                 pred_images = model(input_images)
-                requires_grad(loss_func.reg, True)
-                requires_grad(loss_func.discriminator, False)
                 loss_gen, gen_log_dict = loss_func(pred_images, output_images, optimizer_idx=0, global_step=global_step, last_layer=accelerator.unwrap_model(model).ending.weight)
 
                 ## optimization
                 accelerator.backward(loss_gen)
                 if accelerator.sync_gradients:
-                    params_to_clip = list(model.parameters()) + list(loss_func.reg.parameters())
-                    grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
+                    if args.max_grad_norm > 0.0:
+                        params_to_clip = model.parameters()
+                        accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer.step()
                 optimizer_R_A.step()
                 # lr_scheduler.step()
 
                 if accelerator.sync_gradients:
-                    update_ema(ema, model)  # change ema function
+                    update_ema(ema, model, decay=args.ema_decay)  # change ema function
 
             with accelerator.accumulate(loss_func.discriminator):
+                loss_func.reg.eval()
+                loss_func.discriminator.train()
                 optimizer_D_B.zero_grad()
                 with torch.no_grad():
                     pred_images = model(input_images)
-                requires_grad(loss_func.reg, False)
-                requires_grad(loss_func.discriminator, True)
                 loss_disc, disc_log_dict = loss_func(pred_images, output_images, optimizer_idx=1, global_step=global_step, last_layer=None)
                 ## optimization
                 accelerator.backward(loss_disc)
-                if accelerator.sync_gradients:
-                    params_to_clip = loss_func.discriminator.parameters()
-                    grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
                 optimizer_D_B.step()
 
             # calculate gpu memory usage
@@ -404,9 +460,7 @@ def main():
                                 num_to_remove = len(checkpoints) - args.checkpoints_total_limit + 1
                                 removing_checkpoints = checkpoints[0:num_to_remove]
 
-                                logger.info(
-                                    f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints"
-                                )
+                                logger.info(f"{len(checkpoints)} checkpoints already exist, removing {len(removing_checkpoints)} checkpoints")
                                 logger.info(f"removing checkpoints: {', '.join(removing_checkpoints)}")
 
                                 for removing_checkpoint in removing_checkpoints:
@@ -473,8 +527,6 @@ def main():
 
             if global_step >= args.max_train_steps:
                 break
-        if global_step >= args.max_train_steps:
-            break
 
     accelerator.wait_for_everyone()
     if accelerator.is_main_process:
@@ -488,7 +540,7 @@ def parse_args():
         "--config",
         type=str,
         # default=None,
-        default="cfg/train_configs/train_nafnet_dists_loss_reggan_hq_test.yaml",
+        default="cfg/train_configs/train_nafnet_dists_loss_reggan_uii_all_data.yaml",
         # required=True,
         help="path to config",
     )
