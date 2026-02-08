@@ -437,6 +437,7 @@ def main():
                 ## optimization
                 accelerator.backward(loss_disc)
                 optimizer_D_B.step()
+                lr_scheduler.step()
 
             # calculate gpu memory usage
             mem = f'{torch.cuda.memory_reserved() / 2 ** 30 if torch.cuda.is_available() else 0.0:.3g}G'
