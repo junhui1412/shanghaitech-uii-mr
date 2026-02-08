@@ -10,6 +10,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 # from torchvision.utils import save_image
 from tqdm.auto import tqdm
+from natsort import natsorted
 
 def replace_specific_parent(path: Path, old_name: str, new_name: str) -> Path:
     parts = list(path.parts)
@@ -317,6 +318,50 @@ def process_test_subject_dir(subject_dir, flag="GE_Philip", aca_type=False):
 #         return []
 #
 #     return file_paths
+
+def process_evaluate_subject_dir(subject_dir, prefix="", flag="GE_Philip"):
+    # Only process the subject directory to get the single directory
+    if prefix == "": # low quality
+        if flag == "Siemens":
+            match = re.findall('AI_|UII|_ACA', subject_dir.parent.name)
+        else:
+            match = re.findall('AI_|UII|_ACA', subject_dir.name)
+        if match:
+            return []
+    elif prefix == "UII": # uii
+        if flag == "Siemens":
+            match = re.findall('UII|_ACA', subject_dir.parent.name)
+        else:
+            match = re.findall('UII|_ACA', subject_dir.name)
+        if not match:
+            return []
+    else: # other method
+        if flag == "Siemens":
+            match = re.findall(prefix, subject_dir.parent.name)
+        else:
+            match = re.findall(prefix, subject_dir.name)
+        if not match:
+            return []
+
+    return [subject_dir]
+
+def extract_volume_path_form_subject_dir(subject_dir, flag="GE_Philip"):
+    volume_paths = []
+    if flag == "GE_Philip":
+        volume_paths += subject_dir.glob('*/')
+    elif flag == "Siemens":
+        volume_paths += subject_dir.glob('*/*/')
+    elif flag == "DeepRecon":
+        volume_paths += subject_dir.glob('*/')
+    elif flag == "GE_wo_and_w_enhance":
+        volume_paths += subject_dir.glob('*/')
+    return volume_paths
+
+def find_dicom(subject_dir):
+    paths = sorted(list(subject_dir.glob('IM*')), key=lambda s: int(s.stem[2:]))
+    if len(paths) == 0:
+        paths = sorted(list(subject_dir.glob('*.dcm')))
+    return paths
 
 def pad_to_multiple_centered(img, multiple=16, mode="constant", return_pad_info=False):
     """
@@ -681,7 +726,7 @@ class MRIVolumeTestDicomDataset(Dataset):
 
     def __getitem__(self, index):
         subject_mov, subject_fix = self.file_paths[index]
-        paths_mov, paths_fix = sorted(list(subject_mov.glob('IM*')), key=lambda s: int(s.stem[2:])) + sorted(list(subject_mov.glob('*.dcm'))), sorted(list(subject_fix.glob('IM*')), key=lambda s: int(s.stem[2:])) + sorted(list(subject_fix.glob('*.dcm')))
+        paths_mov, paths_fix = find_dicom(subject_mov), find_dicom(subject_fix)
 
         img_mov_list, img_fix_list, mov_normalize_value_list, fix_normalize_value_list = [], [], [], []
         if self.normalize_type == 'mean':
@@ -825,6 +870,223 @@ class SingleMRIVolumeTestDicomDataset(Dataset):
     # @staticmethod
     # def collate_fn(batch):
     #     ts_mov, ts_fix, mov_normalize_value, fix_normalize_value, lq_path, hq_path = zip(*batch)
+
+
+class SingleMRIVolumeEvaluateDicomDataset(Dataset):
+    """A evaluation dataset of single input volume."""
+    def __init__(self, root: str | list[str], normalize_type='mean', prefix=''):
+        if isinstance(root, str):
+            data_path_list = [Path(root)]
+        elif isinstance(root, list):
+            data_path_list = [Path(p) for p in root]
+        else:
+            data_path_list = [root]
+        self.normalize_type = normalize_type  # 'mean' or 'minmax'
+        self.prefix = prefix
+        self.file_paths = []
+
+        for data_path in data_path_list:
+            self.flag = False
+            # self.aca_type = False
+            split = data_path.name
+            if split in ["ACA_data_transfer_organized_test", "aca_test_20260202"]:
+                # if split == "aca_test_20260202":
+                #     self.aca_type = True
+                # For GE, Philip
+                subject_dirs = sorted(list(data_path.glob('*/*/*FAST*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_Philip", max_workers=16)
+
+                # For Siemens
+                subject_dirs = sorted(list(data_path.glob('*/*/aca*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
+            else:
+                self.flag = True
+                # For GE, Philip
+                subject_dirs = sorted(list(data_path.glob('*/*/*/*/*FAST*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_Philip", max_workers=16)
+
+                # For Siemens
+                subject_dirs = sorted(list(data_path.glob('*/*/*/aca*/*/')))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
+
+                # For DeepRecon
+                subject_dirs = list(data_path.glob('*/*/*/UID*/*/'))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="DeepRecon", max_workers=16)
+
+                # For GE_wo_and_w_enhance
+                subject_dirs = list(data_path.glob('*/Anonymized*/*/ORIG*/'))
+                self.file_paths += self.load_slices_with_threadpool(subject_dirs, flag="GE_wo_and_w_enhance", max_workers=16)
+
+        # sorted file_paths for reproducibility
+        self.file_paths = sorted(self.file_paths)
+
+        # # define random crop transform
+        # self.trans = transforms.Compose([
+        #     transforms.RandomCrop(224, pad_if_needed=True, padding_mode='reflect'),
+        # ])
+
+    def load_slices_with_threadpool(self, subject_dirs, flag="GE_Philip", max_workers=8):
+        """read all slice files using ThreadPoolExecutor"""
+        file_paths = []
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(process_evaluate_subject_dir, subject, prefix=self.prefix, flag=flag)
+                for subject in subject_dirs
+            ]
+
+            for future in tqdm(as_completed(futures), total=len(futures)):
+                file_paths += future.result()
+        return file_paths
+
+    def __len__(self):
+        return len(self.file_paths)
+
+    def __getitem__(self, index):
+        subject_mov = self.file_paths[index]
+        paths_mov = find_dicom(subject_mov)
+
+        img_mov_list, mov_normalize_value_list = [], []
+        if self.normalize_type == 'mean':
+            for path_mov in paths_mov:
+                mov_ds = pydicom.dcmread(path_mov, force=True)
+                img_mov = mov_ds.pixel_array.astype(np.float32)
+                img_mov_list.append(img_mov)
+
+            try:
+                img_mov = np.stack(img_mov_list, axis=0)
+                mov_normalize_value_list = [np.mean(img_mov)] * img_mov.shape[0]
+                mov_normalize_value = np.array(mov_normalize_value_list, dtype=np.float32)
+            except Exception as e:
+                print(f"Error stacking images for {subject_mov}: {e}")
+        elif self.normalize_type in ['minmax', 'clip', 'mean_std']:
+            for path_mov in paths_mov:
+                mov_ds = pydicom.dcmread(path_mov, force=True)
+                img_mov = mov_ds.pixel_array.astype(np.float32)
+                img_mov_list.append(img_mov)
+
+            try:
+                img_mov = np.stack(img_mov_list, axis=0)
+                mov_normalize_value_list = [np.quantile(img_mov, 0.9995)] * img_mov.shape[0]
+                # mov_normalize_value_list = [np.max(img_mov)] * img_mov.shape[0]
+                mov_normalize_value = np.array(mov_normalize_value_list, dtype=np.float32)
+            except Exception as e:
+                print(f"Error stacking images for {subject_mov}: {e}")
+                raise e
+        else:
+            raise NotImplementedError(f"normalize_type {self.normalize_type} not implemented.")
+
+        ts_mov = torch.from_numpy(img_mov).unsqueeze(dim=1) # [b, c, h, w]
+        ts_mov_normalize_value = torch.from_numpy(mov_normalize_value)
+        ts_mov = ts_mov / ts_mov_normalize_value.view(-1, 1, 1, 1)
+        if self.normalize_type == 'minmax':
+            ts_mov = ts_mov * 2.0 - 1.0
+
+        return ts_mov, str(subject_mov)
+
+
+class MRISubjectEvaluateDicomDataset(Dataset):
+    """A evaluation dataset of single subject including different methods."""
+    def __init__(self, root: str | list[str]):
+        if isinstance(root, str):
+            data_path_list = [Path(root)]
+        elif isinstance(root, list):
+            data_path_list = [Path(p) for p in root]
+        else:
+            data_path_list = [root]
+        self.subject_dirs = []
+
+        for data_path in data_path_list:
+            self.flag = False
+            # self.aca_type = False
+            split = data_path.name
+            if split in ["ACA_data_transfer_organized_test", "aca_test_20260202"]:
+                # if split == "aca_test_20260202":
+                #     self.aca_type = True
+                # For GE, Philip, Siemens
+                subject_dirs = sorted(list(data_path.glob('*/*/')))
+                self.subject_dirs += self.load_volume_dir_with_threadpool(subject_dirs, flag="GE_Philip", max_workers=16)
+
+                # For Siemens
+                # subject_dirs = sorted(list(data_path.glob('*/*/aca*/')))
+                # self.subject_dirs += self.load_slices_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
+            else:
+                self.flag = True
+                # For GE, Philip
+                subject_dirs = sorted(list(data_path.glob('[GP]*/[0-9]*/*/*/')))
+                self.subject_dirs += self.load_volume_dir_with_threadpool(subject_dirs, flag="GE_Philip", max_workers=16)
+
+                # For Siemens
+                subject_dirs = sorted(list(data_path.glob('Siemens/*volunteer/*/')))
+                self.subject_dirs += self.load_volume_dir_with_threadpool(subject_dirs, flag="Siemens", max_workers=16)
+
+                # For DeepRecon
+                subject_dirs = list(data_path.glob('*/*/*/UID*/'))
+                self.subject_dirs += self.load_volume_dir_with_threadpool(subject_dirs, flag="DeepRecon", max_workers=16)
+
+                # For GE_wo_and_w_enhance
+                subject_dirs = list(data_path.glob('*/Anonymized*/*/'))
+                self.subject_dirs += self.load_volume_dir_with_threadpool(subject_dirs, flag="GE_wo_and_w_enhance", max_workers=16)
+
+        # sorted file_paths for reproducibility
+        self.subject_dirs = sorted(self.subject_dirs)
+
+        # # define random crop transform
+        # self.trans = transforms.Compose([
+        #     transforms.RandomCrop(224, pad_if_needed=True, padding_mode='reflect'),
+        # ])
+
+    def load_volume_dir_with_threadpool(self, subject_dirs, flag="GE_Philip", max_workers=8):
+        """read all slice files using ThreadPoolExecutor"""
+        volume_dirs = []
+
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            futures = [
+                executor.submit(extract_volume_path_form_subject_dir, subject, flag=flag)
+                for subject in subject_dirs
+            ]
+
+            for future in tqdm(as_completed(futures), total=len(futures)):
+                volume_dirs.append(future.result())
+        return volume_dirs
+
+    def __len__(self):
+        return len(self.subject_dirs)
+
+    def __getitem__(self, index):
+        volume_dirs = self.subject_dirs[index]
+
+        volume_list, volume_name_list = [], []
+        for volume_dir in volume_dirs:
+            img_paths = volume_dir.glob("*") # dicom files
+            img_paths = natsorted(img_paths)
+            img_list = []
+            for img_path in img_paths:
+                img_ds = pydicom.dcmread(img_path, force=True)
+                img = img_ds.pixel_array.astype(np.float32)
+                img_list.append(img)
+            try:
+                img = np.stack(img_list, axis=0)
+                # img_normalize_value_list = [np.quantile(img, 0.9995)] * img.shape[0]
+                img_normalize_value_list = [np.max(img)] * img.shape[0]
+                img_normalize_value = np.array(img_normalize_value_list, dtype=np.float32)
+                # normalize
+                ts_img = torch.from_numpy(img).unsqueeze(dim=1)  # [b, c, h, w]
+                ts_img_normalize_value = torch.from_numpy(img_normalize_value)
+                ts_img = ts_img / ts_img_normalize_value.view(-1, 1, 1, 1)
+            except Exception as e:
+                print(f"Error stacking images for {volume_dir}: {e}")
+                raise e
+            volume_list.append(ts_img)
+            volume_name_list.append('_'.join(volume_dir.parts[-4:]))
+
+        try:
+            volumes = torch.stack(volume_list, dim=0)
+        except Exception as e:
+            print(f"Error stacking volumes for {volume_name_list[0]}: {e}")
+            raise e
+        return volumes, volume_name_list
+
 
 if __name__ == '__main__':
     # dataset = MriTrainConDataset(data_path=r'/mnt/e/deeplearning/data/mri_reconstruction/shanghaitech_uii_mr/deformable_registration_splited/training')

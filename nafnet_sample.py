@@ -43,6 +43,10 @@ name2seriesID = {
     'nafnet_mix_dists_loss_5e-2_hq_uii_all_data': 33,
     'nafnet_dists_loss_5e-2_reggan_hq_test': 34,
     'nafnet_dists_loss_5e-2_reggan_hq_test_1.0': 35,
+    'nafnet_dists_loss_5e-2_gan_uii_all_data_continue': 36,
+    'nafnet_dists_loss_5e-2_reggan_uii_all_data': 37,
+    'nafnet_dists_loss_5e-2_reggan_uii_all_data_wrong_lr_decay': 38,
+    'nafnet_dists_loss_5e-2_gan_uii_all_data': 39,
     'nafnet_mix': 10,
     'nafnet_perceptual_loss': 22,
     'nafnet_max_normalize': 20,
@@ -222,8 +226,8 @@ def main(args):
             ssi = 0  # start slice idx
             for split in range(num_splits):
                 # Sample images:
-                micro_input_immages = input_images[ssi: ssi+args.split_batch]
-                samples = model(micro_input_immages)
+                micro_input_images = input_images[ssi: ssi+args.split_batch]
+                samples = model(micro_input_images)
                 samples = samples.to(torch.float32)  # [B, 1, H, W]
                 ssi += args.split_batch
                 samples_list.append(samples)
@@ -458,8 +462,8 @@ if __name__ == "__main__":
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
     parser.add_argument("--ckpt", default="./runs/train_nafnet/dists_loss_5e-2_hq_lr_1e-4/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_lr_1e-4', type=str, choices=list(name2seriesID.keys()), help="Type of diffusion model.")
-    # general name2seriesID
+    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_lr_1e-4', type=str, choices=list(name2seriesID.keys()), help="Type of nafnet model.")
+    # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
     parser.add_argument("--display-image", default=False, type=bool, help="Whether to display and save the sampled images as png files.")

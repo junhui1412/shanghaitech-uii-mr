@@ -14,7 +14,7 @@ Other versions of PyTorch with proper CUDA should work but are not fully tested.
 
 ```bash
 # In shanghaitech-uii-mr folder
-conda create -n rddm python=3.10
+conda create -n rddm python=3.10 -y
 conda activate rddm
 
 pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
@@ -25,7 +25,11 @@ pip install scipy scikit-image opencv-python # NAFNet
 
 pip install dists-pytorch # Deep Image Structure and Texture Similarity (DISTS Loss)
 
-pip install transformers # For PixNerDiT
+pip install transformers==4.57.6 # For PixNerDiT
+
+pip install openai-clip # For CLIP-IQA
+
+pip install natsort # For sort "IM*" files
 
 ```
 
@@ -38,13 +42,14 @@ This process will precompute the 'volume mean', 'volume max' and 'volume percent
 ```python
 # uncomment and run the following command in preprocess_mr_dicom.py
 # You can modify the parameters such as 'root_path' in the function 'multi_process' as needed.
-def multi_process(num_processes=10, split='training'):
+def multi_process(root_path, split='training', num_processes=10):
     ...
-    root_path = r""
+    
     ...
 
 if __name__ == '__main__':
-      multi_process(num_processes=1, split='training') # training, validation, testing
+      root_path = r"../Data/training_data/"
+      multi_process(root_path, split='GE_wo_and_w_enhance', num_processes=20) # shanghaitech: training, validation, testing # uii: GE, Philip, Siemens, DeepRecon, GE_wo_and_w_enhance
 ```
 
 ### 3. Training
