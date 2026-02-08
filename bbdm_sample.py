@@ -321,7 +321,7 @@ if __name__ == "__main__":
     # model
     parser.add_argument("--sample-steps", default=50, type=int, help="Number of sampling steps.")
     parser.add_argument("--ckpt", default="./runs/train_bbdm/unet_256c_dists_0.1_uii_all_data/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='bbdm_unet_256c_dists_0.1_uii_all_data', type=str, choices=['bbdm_unet_256c', 'bbdm_unet_256c_mean_minmax_normalize', 'bbdm_unet_256c_dists', 'bbdm_unet_256c_dists_0.1', 'bbdm_unet_256c_dists_0.01', 'bbdm_unet_256c_dists_0.1_uii_all_data', 'bbdm_unet_64c', 'bbdm_unet_128c'], help="Type of diffusion model.")
+    parser.add_argument("--model-type", default='bbdm_unet_256c_dists_0.1_uii_all_data', type=str, choices=list(name2seriesID.keys()), help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
@@ -330,5 +330,5 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
     # ACA_final_test_data/normalGT/
-    # CUDA_VISIBLE_DEVICES=5 python bbdm_sample.py --model-type 'bbdm_unet_256c_dists_0.1_uii_all_data' --split-batch 4 --ckpt ./runs/train_bbdm/unet_256c_dists_0.1_uii_all_data/checkpoints/model/ --data-path /data/yuning/zhongjian/Data/aca_test_20260202/ --save ./runs --save-dicom True --display-image False
+    # CUDA_VISIBLE_DEVICES=5 python bbdm_sample.py --model-type 'bbdm_unet_256c_dists_0.1_uii_all_data' --split-batch 4 --ckpt ./runs/train_bbdm/unet_256c_dists_0.1_uii_all_data/checkpoints/model/ --data-path /data/yuning/zhongjian/Data/aca_test_20260202/ --save ./runs --save-dicom True --display-image ""
 

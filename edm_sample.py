@@ -403,7 +403,7 @@ if __name__ == "__main__":
     # model
     parser.add_argument("--sample-steps", default=50, type=int, help="Number of sampling steps.")
     parser.add_argument("--ckpt", default="./runs/train_edm/unet_256c/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='edm_unet_256c', type=str, choices=['edm_unet_256c'], help="Type of diffusion model.")
+    parser.add_argument("--model-type", default='edm_unet_256c', type=str, choices=list(name2seriesID.keys()), help="Type of diffusion model.")
     # general
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")

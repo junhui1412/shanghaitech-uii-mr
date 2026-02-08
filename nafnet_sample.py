@@ -8,7 +8,6 @@
 Sample new images from a pre-trained model.
 """
 import math
-import shutil
 from pathlib import Path
 
 import pandas as pd
@@ -41,7 +40,9 @@ name2seriesID = {
     'nafnet_dists_loss_5e-2_hq_lr_1e-4': 30,
     'nafnet_l1_only_hq_lr_1e-4': 31,
     'nafnet_dists_loss_5e-2_hq_uii_all_data': 32,
-    'nafnet_mix_dists_loss_5e-2_hq_uii_all_data':33,
+    'nafnet_mix_dists_loss_5e-2_hq_uii_all_data': 33,
+    'nafnet_dists_loss_5e-2_reggan_hq_test': 34,
+    'nafnet_dists_loss_5e-2_reggan_hq_test_1.0': 35,
     'nafnet_mix': 10,
     'nafnet_perceptual_loss': 22,
     'nafnet_max_normalize': 20,
@@ -457,8 +458,8 @@ if __name__ == "__main__":
     parser.add_argument("--sample-middle-slices", default=0, type=int, help="If >0, only sample the middle N slices of each volume to save time.")
     # model
     parser.add_argument("--ckpt", default="./runs/train_nafnet/dists_loss_5e-2_hq_lr_1e-4/checkpoints/model_ema.pt", type=str, help="Optional path to a model checkpoint.")
-    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_lr_1e-4', type=str, choices=['nafnet', 'nafnet_l1_only_hq_lr_1e-4', 'nafnet_dists_loss_1e-3', 'nafnet_dists_loss_1e-4', 'nafnet_dists_loss_1e-4_l2_reg', 'nafnet_dists_loss_1e-4_hq', 'nafnet_dists_loss_1e-4_hq_lr_1e-4', 'nafnet_dists_loss_1.0_hq_lr_1e-4', 'nafnet_dists_loss_0.1_hq_lr_1e-4', 'nafnet_dists_loss_1e-2_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_lr_1e-4', 'nafnet_dists_loss_1e-3_hq_lr_1e-4', 'nafnet_dists_loss_5e-2_hq_uii_all_data', 'nafnet_mix_dists_loss_5e-2_hq_uii_all_data','nafnet_dists_loss_1e-6', 'nafnet_mix', 'nafnet_perceptual_loss', 'nafnet_max_normalize'], help="Type of diffusion model.")
-    # general
+    parser.add_argument("--model-type", default='nafnet_dists_loss_5e-2_hq_lr_1e-4', type=str, choices=list(name2seriesID.keys()), help="Type of diffusion model.")
+    # general name2seriesID
     parser.add_argument("--save", default='./runs', type=str, help="Path to save sampled images.")
     parser.add_argument("--save-dicom", default=True, type=bool, help="Whether to save the sampled images as dicom files.")
     parser.add_argument("--display-image", default=False, type=bool, help="Whether to display and save the sampled images as png files.")
@@ -466,4 +467,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
     main(args)
     # main_single_input(args)
-    # CUDA_VISIBLE_DEVICES=2 python nafnet_sample.py --model-type 'nafnet_dists_loss_5e-2_hq_uii_all_data' --split-batch 4 --ckpt ./runs/train_nafnet/dists_loss_5e-2_hq_uii_all_data/checkpoints/model/ --data-path /data/yuning/zhongjian/Data/aca_test_20260202/ --save ./runs --save-dicom True --display-image False
+    # CUDA_VISIBLE_DEVICES=2 python nafnet_sample.py --model-type 'nafnet_dists_loss_5e-2_hq_uii_all_data' --split-batch 4 --ckpt ./runs/train_nafnet/dists_loss_5e-2_hq_uii_all_data/checkpoints/model/ --data-path /data/yuning/zhongjian/Data/aca_test_20260202/ --save ./runs --save-dicom True --display-image ""
