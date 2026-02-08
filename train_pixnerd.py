@@ -342,17 +342,14 @@ def main():
     dataloader = create_dataloader(args, accelerator, logger=logger, is_train=True)
     val_dataloader = create_dataloader(args, accelerator, logger=logger, is_train=False)
 
-    # Scheduler and math around the number of training steps.
-    overrode_max_train_steps = False
-    num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
-    if args.max_train_steps is None:
-        args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-        overrode_max_train_steps = True
+    dataloader, val_dataloader = accelerator.prepare(dataloader, val_dataloader)
 
+    # Scheduler and math around the number of training steps.
     num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
-    if overrode_max_train_steps:
+    if getattr(args, "max_train_steps", None) is None:
         args.max_train_steps = args.num_train_epochs * num_update_steps_per_epoch
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
+    else:
+        args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
     # Setup optimizer and learning rate scheduler:
     optimizer = torch.optim.AdamW(
@@ -380,9 +377,7 @@ def main():
     global_step = 0
     first_epoch = 0
 
-    model, optimizer, lr_scheduler, dataloader, val_dataloader = accelerator.prepare(
-        model, optimizer, lr_scheduler, dataloader, val_dataloader
-    )
+    model, optimizer, lr_scheduler = accelerator.prepare( model, optimizer, lr_scheduler)
 
     if accelerator.is_main_process:
         tracker_config = OmegaConf.to_container(args, resolve=True)

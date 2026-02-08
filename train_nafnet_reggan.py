@@ -274,6 +274,8 @@ def main():
     dataloader = create_dataloader(args, accelerator, logger=logger, is_train=True)
     val_dataloader = create_dataloader(args, accelerator, logger=logger, is_train=False)
 
+    dataloader, val_dataloader = accelerator.prepare(dataloader, val_dataloader)
+
     # Scheduler and math around the number of training steps.
     num_update_steps_per_epoch = math.ceil(len(dataloader) / args.gradient_accumulation_steps)
     if getattr(args, "max_train_steps", None) is None:
@@ -334,12 +336,12 @@ def main():
         model, loss_func.discriminator, loss_func.reg,
         optimizer, optimizer_D_B, optimizer_R_A,
         lr_scheduler, lr_scheduler_D_B, lr_scheduler_R_A,
-        dataloader, val_dataloader
+        # dataloader, val_dataloader
     ) = accelerator.prepare(
         model, loss_func.discriminator, loss_func.reg,
         optimizer, optimizer_D_B, optimizer_R_A,
         lr_scheduler, lr_scheduler_D_B, lr_scheduler_R_A,
-        dataloader, val_dataloader
+        # dataloader, val_dataloader
     )
 
     if accelerator.is_main_process:
