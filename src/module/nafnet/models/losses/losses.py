@@ -358,7 +358,7 @@ class DISTSLossWithDiscriminatorAndRegistration(nn.Module):
                 normalize_target_3c = normalize_target.repeat(1, 3, 1, 1)
                 normalize_pred_3c = normalize_pred.repeat(1, 3, 1, 1)
                 p_loss = self.dists_loss(normalize_target_3c, normalize_pred_3c, require_grad=True, batch_average=False)
-                rec_loss = rec_loss + self.dists_weight * p_loss
+                rec_loss = rec_loss + self.dists_weight * p_loss.view(-1, 1, 1, 1)
 
             nll_loss = rec_loss / torch.exp(self.logvar) + self.logvar
             nll_loss = torch.sum(nll_loss) / nll_loss.shape[0]
@@ -378,7 +378,7 @@ class DISTSLossWithDiscriminatorAndRegistration(nn.Module):
                 d_weight = torch.tensor(0.0)
 
             disc_factor = adopt_weight(self.disc_factor, global_step, threshold=self.discriminator_iter_start)
-            loss = nll_loss + d_weight * disc_factor * g_loss
+            loss = nll_loss + d_weight * disc_factor * g_loss + self.smooth_weight * sm_loss
 
             log = {"{}/total_loss".format(split): loss.clone().detach().mean(),
                    "{}/logvar".format(split): self.logvar.detach(),

@@ -3,7 +3,7 @@ import re
 from copy import deepcopy
 import logging
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = '5' # TODO: delete after testing
+# os.environ["CUDA_VISIBLE_DEVICES"] = '5' # TODO: delete after testing
 from pathlib import Path
 from collections import OrderedDict
 import shutil
@@ -217,7 +217,7 @@ def main():
         torch.backends.cudnn.allow_tf32 = True
 
     # Setup loss function:
-    loss_func = DISTSLossWithDiscriminatorAndRegistration(disc_start=0, dists_weight=0.5, device=device, weight_dtype=weight_dtype)
+    loss_func = DISTSLossWithDiscriminatorAndRegistration(disc_start=0, disc_weight=0.5, dists_weight=0.05, device=device, weight_dtype=weight_dtype)
     requires_grad(loss_func.discriminator, True)
     requires_grad(loss_func.reg, True)
 
@@ -354,10 +354,10 @@ def main():
                 pred_images = model(input_images)
                 requires_grad(loss_func.reg, True)
                 requires_grad(loss_func.discriminator, False)
-                loss, log_dict = loss_func(pred_images, output_images, optimizer_idx=0, global_step=global_step, last_layer=accelerator.unwrap_model(model).ending.weight)
+                loss_gen, gen_log_dict = loss_func(pred_images, output_images, optimizer_idx=0, global_step=global_step, last_layer=accelerator.unwrap_model(model).ending.weight)
 
                 ## optimization
-                accelerator.backward(loss)
+                accelerator.backward(loss_gen)
                 if accelerator.sync_gradients:
                     params_to_clip = model.parameters()
                     grad_norm = accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
@@ -374,9 +374,9 @@ def main():
                     pred_images = model(input_images)
                 requires_grad(loss_func.reg, False)
                 requires_grad(loss_func.discriminator, True)
-                loss, log_dict = loss_func(pred_images, output_images, optimizer_idx=1, global_step=global_step, last_layer=None)
+                loss_disc, disc_log_dict = loss_func(pred_images, output_images, optimizer_idx=1, global_step=global_step, last_layer=None)
                 ## optimization
-                accelerator.backward(loss)
+                accelerator.backward(loss_disc)
                 optimizer_D_B.step()
 
             # calculate gpu memory usage
@@ -457,14 +457,16 @@ def main():
                     if logger is not None:
                         logger.info("Generating samples done.")
 
-            logs = {
-                "loss": accelerator.gather(loss).mean().detach().item(),
-                "lr": optimizer.param_groups[0]['lr'],
-                "gpu_memory": mem,
-            }
-            if accelerator.is_main_process:
-                progress_bar.set_postfix(**logs)
-                accelerator.log(logs, step=global_step)
+                logs = {
+                    "loss_gen": accelerator.gather(loss_gen).mean().detach().item(),
+                    "loss_disc": accelerator.gather(loss_disc).mean().detach().item(),
+                    "lr": optimizer.param_groups[0]['lr'],
+                    "gpu_memory": mem,
+                }
+                if accelerator.is_main_process:
+                    progress_bar.set_postfix(**logs)
+                    # accelerator.log(logs, step=global_step)
+                    accelerator.log({**gen_log_dict, **disc_log_dict}, step=global_step)
 
             if global_step >= args.max_train_steps:
                 break
@@ -483,7 +485,7 @@ def parse_args():
         "--config",
         type=str,
         # default=None,
-        default="cfg/train_configs/train_nafnet_dists_loss_hq_uii_all_data.yaml",
+        default="cfg/train_configs/train_nafnet_dists_loss_reggan_hq.yaml",
         # required=True,
         help="path to config",
     )
